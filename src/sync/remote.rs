@@ -19,6 +19,14 @@ pub enum Check {
     New,
     /// Immich already has it as this asset.
     Exists(String),
+    /// Immich has it, but in the trash: it must come back, or the file here
+    /// would be "synced" to something about to be purged.
+    Trashed(String),
+}
+
+pub async fn restore(immich: &Immich, asset_ids: &[String]) -> Result<()> {
+    immich.post("/api/trash/restore/assets", json!({ "ids": asset_ids })).await?;
+    Ok(())
 }
 
 pub async fn check(immich: &Immich, items: &[(String, String)]) -> Result<Vec<(String, Check)>> {
@@ -29,8 +37,9 @@ pub async fn check(immich: &Immich, items: &[(String, String)]) -> Result<Vec<(S
         let Some(id) = result.get("id").and_then(|v| v.as_str()) else { continue };
         let action = result.get("action").and_then(|v| v.as_str()).unwrap_or("accept");
         let asset = result.get("assetId").and_then(|v| v.as_str()).unwrap_or("");
+        let trashed = result.get("isTrashed").and_then(|v| v.as_bool()).unwrap_or(false);
         let verdict = if action == "reject" && !asset.is_empty() {
-            Check::Exists(asset.to_string())
+            if trashed { Check::Trashed(asset.to_string()) } else { Check::Exists(asset.to_string()) }
         } else {
             Check::New
         };

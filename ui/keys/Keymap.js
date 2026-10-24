@@ -50,17 +50,17 @@ var BINDINGS = [
   { id: "selectAll", keys: ["Ctrl+A"], contexts: ["grid"], group: "Selecting", label: "Select everything loaded" },
 
   // Acting on the photo under the cursor, or on the selection
-  { id: "favorite", keys: ["f"], contexts: PHOTO, group: "Photos", label: "Favourite or unfavourite",
+  { id: "favorite", changes: true, keys: ["f"], contexts: PHOTO, group: "Photos", label: "Favourite or unfavourite",
     hintKey: "f", hint: { grid: "favourite", viewer: "favourite" } },
-  { id: "archive", keys: ["a"], contexts: PHOTO, group: "Photos", label: "Archive or unarchive" },
-  { id: "trash", keys: ["Delete", "d"], contexts: PHOTO, group: "Photos", label: "Move to the trash, or restore from it",
+  { id: "archive", changes: true, keys: ["a"], contexts: PHOTO, group: "Photos", label: "Archive or unarchive" },
+  { id: "trash", changes: true, keys: ["Delete", "d"], contexts: PHOTO, group: "Photos", label: "Move to the trash, or restore from it",
     hintKey: "d", hint: { grid: "trash", viewer: "trash" } },
-  { id: "deleteForever", keys: ["Shift+Delete"], contexts: PHOTO, group: "Photos", label: "Delete permanently..." },
-  { id: "addToAlbum", keys: ["Shift+A"], contexts: PHOTO, group: "Photos", label: "Add to an album..." },
-  { id: "tag", keys: ["t"], contexts: PHOTO, group: "Photos", label: "Tag..." },
-  { id: "share", keys: ["s"], contexts: PHOTO, group: "Photos", label: "Share a link..." },
-  { id: "download", keys: ["Shift+D"], contexts: PHOTO, group: "Photos", label: "Download the original" },
-  { id: "rate", keys: ["1", "2", "3", "4", "5"], contexts: ["viewer"], group: "Photos", label: "Rate 1 to 5 stars" },
+  { id: "deleteForever", changes: true, keys: ["Shift+Delete"], contexts: PHOTO, group: "Photos", label: "Delete permanently..." },
+  { id: "addToAlbum", changes: true, keys: ["Shift+A"], contexts: PHOTO, group: "Photos", label: "Add to an album..." },
+  { id: "tag", changes: true, keys: ["t"], contexts: PHOTO, group: "Photos", label: "Tag..." },
+  { id: "share", changes: true, keys: ["s"], contexts: PHOTO, group: "Photos", label: "Share a link..." },
+  { id: "download", changes: true, keys: ["Shift+D"], contexts: PHOTO, group: "Photos", label: "Download the original" },
+  { id: "rate", changes: true, keys: ["1", "2", "3", "4", "5"], contexts: ["viewer"], group: "Photos", label: "Rate 1 to 5 stars" },
 
   // Going places
   { id: "search", keys: ["/"], contexts: ["grid", "tiles", "viewer"], group: "Going places", label: "Search",
@@ -109,7 +109,8 @@ function sequencesFor(context) {
       if (textContext(context) && !typingSafe(seq)) continue
       if (seen[seq]) continue
       seen[seq] = true
-      out.push({ id: b.id, sequence: seq })
+      // Holding a key that changes the library must not repeat it down the grid.
+      out.push({ id: b.id, sequence: seq, repeat: b.changes !== true })
     }
   }
   return out

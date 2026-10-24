@@ -23,8 +23,41 @@ Item {
   signal tagOpened(var tag)
 
   readonly property var exif: details && details.exif ? details.exif : ({})
+  readonly property bool typing: description.activeFocus
 
-  onAssetChanged: loadAlbums()
+  // The description being written belongs to the photo it was started on,
+  // even if the viewer moves on before it is saved.
+  property string editingId: ""
+  property string editingText: ""
+  property string savedText: ""
+
+  function flushDescription() {
+    if (!editingId) return
+    var id = editingId
+    var text = editingText
+    editingId = ""
+    if (text === savedText) return
+    service.call("asset.update", { ids: [id], description: text }, function(r, e) {
+      if (e) root.toast(e.message, "error")
+      else root.changed()
+    })
+  }
+
+  function finishEditing() {
+    flushDescription()
+    description.focus = false
+  }
+
+  Timer {
+    id: descriptionTimer
+    interval: 900
+    onTriggered: root.flushDescription()
+  }
+
+  onAssetChanged: {
+    flushDescription()
+    loadAlbums()
+  }
   function loadAlbums() {
     albums = []
     if (!asset || width === 0) return
@@ -34,16 +67,6 @@ Item {
     })
   }
   onWidthChanged: if (width > 0 && albums.length === 0) loadAlbums()
-
-  function saveDescription() {
-    if (!details) return
-    var text = description.text
-    if (text === (exif.description || "")) return
-    service.call("asset.update", { ids: [details.id], description: text }, function(r, e) {
-      if (e) root.toast(e.message, "error")
-      else { root.toast("Description saved", "info"); root.changed() }
-    })
-  }
 
   function setRating(stars) {
     if (!details) return
@@ -127,8 +150,17 @@ Item {
           border.color: description.activeFocus ? root.theme.accent : root.theme.border
           radius: root.theme.radius
         }
-        onActiveFocusChanged: if (!activeFocus) root.saveDescription()
-        Keys.onEscapePressed: function(e) { focus = false; e.accepted = true }
+        onActiveFocusChanged: {
+          if (activeFocus && root.details) {
+            root.editingId = root.details.id
+            root.savedText = root.exif.description || ""
+            root.editingText = text
+          } else if (!activeFocus) root.flushDescription()
+        }
+        onTextChanged: if (activeFocus && root.editingId) {
+          root.editingText = text
+          descriptionTimer.restart()
+        }
       }
 
       // Rating

@@ -25,7 +25,8 @@ def free_port():
 
 class Backend:
     def __init__(self, binary, home):
-        env = dict(os.environ, OMAMICH_HOME=home)
+        # The desktop trash too: mirrored deletions must never reach the real one.
+        env = dict(os.environ, OMAMICH_HOME=home, XDG_DATA_HOME=os.path.join(home, "xdg-data"))
         self.proc = subprocess.Popen([binary, "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      text=True, bufsize=1, env=env)
         self.n = 0
@@ -101,7 +102,8 @@ def main():
             f.write("<x/>")
 
         backend = Backend(binary, home)
-        DEBUG.append(lambda: json.dumps(backend.call("sync.status"), indent=1)[:3000])
+        DEBUG.append(lambda: json.dumps([e for e in backend.call("sync.status")["events"] if "again" in e["name"] or e["kind"] == "failed"], indent=1))
+        DEBUG.append(lambda: json.dumps({k: v for k, v in backend.call("sync.status").items() if k not in ("events", "folders")}))
         DEBUG.append(lambda: json.dumps(state(port))[:2000])
         backend.call("settings.update", {"patch": {"serverUrl": f"127.0.0.1:{port}", "sync": {"pauseOnMetered": False}}})
         try:
@@ -162,6 +164,47 @@ def main():
         assert uploads_after == uploads_before + 1, "downloaded files must not be uploaded again"
         status = backend.call("sync.status")
         assert status["failed"] == 0, status
+
+        # A folder that disappears (an unmounted drive) must not empty Immich.
+        backend.call("settings.update", {"patch": {"sync": {"enabled": True}}})
+        mass = os.path.join(root, "M")
+        for i in range(30):
+            photo(f"{mass}/m{i}.jpg", f"mass{i}")
+        backend.call("sync.folderSave", {"folder": {"path": mass, "albumName": "Mass", "mirrorLocalDeletes": True}})
+        wait_for("thirty photos uploaded", lambda: len(state(port)["albums"].get("Mass", [])) == 30, 60)
+        os.rename(mass, mass + "-unmounted")
+        backend.call("sync.rescan")
+        time.sleep(16)
+        trashed = [v for v in state(port)["assets"].values() if v["name"].startswith("m") and v["trashed"]]
+        assert not trashed, f"{len(trashed)} photos were trashed because their folder vanished"
+        os.makedirs(mass)
+        for i in range(25):
+            photo(f"{mass}/m{i + 100}.jpg", f"other{i}")
+        backend.call("sync.rescan")
+        time.sleep(16)
+        trashed = [v for v in state(port)["assets"].values() if v["name"].startswith("m") and v["trashed"]]
+        assert not trashed, f"{len(trashed)} photos trashed when most of a folder vanished at once"
+        print("ok: a vanished or emptied folder does not trash Immich")
+
+        # Pointing a download folder at another album must not trash its files.
+        down = os.path.join(root, "D")
+        backend.call("sync.folderSave", {"folder": {"path": down, "albumName": "Trip", "method": "download", "mirrorRemoteDeletes": True}})
+        wait_for("Trip downloaded into D", lambda: os.path.isdir(down) and len(os.listdir(down)) >= 2)
+        before = sorted(os.listdir(down))
+        folder = next(f for f in backend.call("settings.get")["settings"]["sync"]["folders"] if f["path"] == down)
+        folder["albumName"] = "Mass"
+        backend.call("sync.folderSave", {"folder": folder})
+        time.sleep(8)
+        assert all(os.path.exists(os.path.join(down, n)) for n in before), "files were trashed after an album change"
+        trash_dir = os.path.join(home, "xdg-data", "Trash", "files")
+        assert not os.path.isdir(trash_dir) or not os.listdir(trash_dir), os.listdir(trash_dir)
+        print("ok: changing a folder's album keeps its files")
+
+        # A file whose Immich copy is in the trash brings it back.
+        trashed_id = next(k for k, v in state(port)["assets"].items() if v["name"] == "d.jpg")
+        assert state(port)["assets"][trashed_id]["trashed"]
+        photo(f"{a}/d-again.jpg", "d")
+        wait_for("the trashed copy is restored", lambda: not state(port)["assets"][trashed_id]["trashed"])
         print("all sync checks passed")
     finally:
         if backend:

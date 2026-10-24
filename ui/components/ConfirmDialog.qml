@@ -18,7 +18,7 @@ Sheet {
     danger = options.danger !== false
     onConfirm = options.onConfirm || null
     opened = true
-    Qt.callLater(function() { confirmButton.forceActiveFocus() })
+    Qt.callLater(function() { cancelButton.forceActiveFocus() })
   }
 
   function confirm() {
@@ -44,7 +44,14 @@ Sheet {
     Row {
       anchors.right: parent.right
       spacing: root.theme.space(8)
-      TextButton { theme: root.theme; text: "Cancel"; onClicked: root.close() }
+      TextButton {
+        id: cancelButton
+        theme: root.theme
+        text: "Cancel"
+        onClicked: root.close()
+        Keys.onReturnPressed: root.close()
+        Keys.onEnterPressed: root.close()
+      }
       TextButton {
         id: confirmButton
         theme: root.theme

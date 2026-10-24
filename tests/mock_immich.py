@@ -157,7 +157,8 @@ class Handler(BaseHTTPRequestHandler):
                     b64 = base64.b64encode(bytes.fromhex(item["checksum"])).decode()
                     found = next((a for a in ASSETS.values() if a["checksum"] == b64), None)
                     if found:
-                        results.append({"id": item["id"], "action": "reject", "reason": "duplicate", "assetId": found["id"]})
+                        results.append({"id": item["id"], "action": "reject", "reason": "duplicate", "assetId": found["id"],
+                                        "isTrashed": found["isTrashed"]})
                     else:
                         results.append({"id": item["id"], "action": "accept"})
             return self.reply(200, {"results": results})

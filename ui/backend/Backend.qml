@@ -46,6 +46,8 @@ Item {
 
   // Generous waits for the calls that walk a whole library.
   function budget(method) {
+    // A change that Immich finishes late must not be reported as failed.
+    if (/^(asset|album|tag|trash|person|sharedLink|partner)\./.test(method) && !/\.(get|albums|list)$/.test(method)) return 150000
     if (method === "people.list" || method === "places.list" || method === "folders.paths") return 120000
     if (method === "asset.download") return 600000
     if (method === "server.statistics" || method === "search") return 60000
@@ -85,12 +87,16 @@ Item {
       for (var id in root.pending) if (root.pending[id].deadline < now) expired.push(id)
       if (expired.length === 0) return
       var next = Object.assign({}, root.pending)
+      var callbacks = []
       for (var i = 0; i < expired.length; i++) {
-        var entry = next[expired[i]]
+        callbacks.push(next[expired[i]].callback)
         delete next[expired[i]]
-        entry.callback(null, { code: -32011, message: "Immich took too long to answer" })
       }
+      // Forget them first, so a callback that throws cannot make them fire again.
       root.pending = next
+      for (var j = 0; j < callbacks.length; j++) {
+        try { callbacks[j](null, { code: -32011, message: "Immich took too long to answer" }) } catch (e) { console.warn(e) }
+      }
     }
   }
 

@@ -111,6 +111,17 @@ test("typing contexts bind no bare letters", () => {
   }
 })
 
+test("holding a key never repeats a change to the library", () => {
+  for (const context of ["grid", "viewer"]) {
+    for (const entry of Keymap.sequencesFor(context)) {
+      const binding = Keymap.BINDINGS.find(b => b.id === entry.id)
+      if (["favorite", "archive", "trash", "deleteForever", "addToAlbum", "tag", "share", "download", "rate"].includes(entry.id))
+        assert.strictEqual(entry.repeat, false, entry.id + " on " + entry.sequence + " repeats")
+      else assert.strictEqual(entry.repeat, binding.changes !== true)
+    }
+  }
+})
+
 test("the viewer and grid have hints", () => {
   assert.ok(Keymap.hintsFor("grid").length >= 4)
   assert.ok(Keymap.hintsFor("viewer").length >= 4)

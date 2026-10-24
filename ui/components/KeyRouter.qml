@@ -19,7 +19,7 @@ Item {
       required property var modelData
       sequence: modelData.sequence
       context: Qt.WindowShortcut
-      autoRepeat: true
+      autoRepeat: modelData.repeat !== false
       onActivated: root.triggered(modelData.id, modelData.sequence)
     }
   }

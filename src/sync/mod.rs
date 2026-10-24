@@ -189,11 +189,22 @@ impl Engine {
                 self.albums.lock().unwrap().remove(&folder.id);
             }
         }
-        // A folder whose album changed must look its album up again.
+        // A folder whose album or path changed starts over: it looks its
+        // album up again, forgets the album it mirrored, and forgets the
+        // files it knew at the old path rather than treating them as deleted.
         for folder in &next.folders {
             if let Some(old) = previous.folders.iter().find(|f| f.id == folder.id) {
-                if old.album_name != folder.album_name || old.album_id != folder.album_id {
+                if old.album_name != folder.album_name || old.album_id != folder.album_id || old.path != folder.path {
                     self.albums.lock().unwrap().remove(&folder.id);
+                    let prefix = format!("{}:", folder.id);
+                    self.state.lock().unwrap().album_snapshots.retain(|k, _| !k.starts_with(&prefix));
+                }
+                if old.path != folder.path {
+                    let _ = self.index.forget_folder(&folder.id);
+                    let mut state = self.state.lock().unwrap();
+                    state.queue.retain(|job| !matches!(job, Job::Delete { folder_id, .. } if folder_id == &folder.id));
+                    let keys: HashSet<_> = state.queue.iter().map(|j| j.key()).collect();
+                    state.queued = keys;
                 }
             }
         }
@@ -374,46 +385,81 @@ impl Engine {
         if !folder.method.uploads() && !folder.mirror_local_deletes {
             return Ok(());
         }
+        // A folder that cannot be read (an unmounted drive, a share that is
+        // down) says nothing about which files are gone.
+        if !folder_readable(root) {
+            if root == Path::new(&folder.path) {
+                self.event("failed", &folder.path, "This folder cannot be read right now; it was skipped");
+            }
+            return Ok(());
+        }
         let walk_root = root.to_path_buf();
         let folder_copy = folder.clone();
-        let found: Vec<(PathBuf, u64, i64)> = tokio::task::spawn_blocking(move || {
-            walkdir::WalkDir::new(&walk_root)
-                .follow_links(false)
-                .into_iter()
-                .filter_entry(|e| {
-                    !(folder_copy.ignore_hidden
-                        && e.depth() > 0
-                        && e.file_name().to_str().map(|s| s.starts_with('.')).unwrap_or(false))
-                })
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-                .filter_map(|e| {
-                    let meta = e.metadata().ok()?;
-                    let path = e.into_path();
-                    if files::is_partial(&path) || files::rejection(&folder_copy, &path, meta.len()).is_some() {
-                        return None;
-                    }
-                    Some((path, meta.len(), files::mtime_secs(&meta)))
-                })
-                .collect()
+        let (found, walk_errors): (Vec<(PathBuf, u64, i64)>, usize) = tokio::task::spawn_blocking(move || {
+            let mut errors = 0usize;
+            let mut out = Vec::new();
+            let walker = walkdir::WalkDir::new(&walk_root).follow_links(false).into_iter().filter_entry(|e| {
+                !(folder_copy.ignore_hidden
+                    && e.depth() > 0
+                    && e.file_name().to_str().map(|s| s.starts_with('.')).unwrap_or(false))
+            });
+            for entry in walker {
+                let Ok(entry) = entry else {
+                    errors += 1;
+                    continue;
+                };
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let Ok(meta) = entry.metadata() else {
+                    errors += 1;
+                    continue;
+                };
+                let path = entry.into_path();
+                if files::is_partial(&path) || files::rejection(&folder_copy, &path, meta.len()).is_some() {
+                    continue;
+                }
+                out.push((path, meta.len(), files::mtime_secs(&meta)));
+            }
+            (out, errors)
         })
         .await
         .map_err(|e| Error::internal(e.to_string()))?;
 
         let records = self.index.under_folder(&folder.id)?;
         let present: HashSet<String> = found.iter().map(|(p, _, _)| p.to_string_lossy().into_owned()).collect();
-        // Files the index knows that are gone now.
-        if root == Path::new(&folder.path) {
-            for record in records.iter().filter(|r| !present.contains(&r.path)) {
-                if Path::new(&record.path).exists() {
-                    continue;
-                }
-                if folder.mirror_local_deletes && record.state == "done" && !record.asset_id.is_empty() {
-                    self.push(Job::Delete { path: record.path.clone(), folder_id: folder.id.clone() });
-                } else {
-                    let _ = self.index.remove(&record.path);
+        // Files the index knows that are gone now — only after a complete,
+        // error-free walk of the whole folder, and only files the filesystem
+        // says definitely do not exist.
+        if root == Path::new(&folder.path) && walk_errors == 0 {
+            let gone: Vec<&FileRecord> = records
+                .iter()
+                .filter(|r| !present.contains(&r.path) && definitely_gone(Path::new(&r.path)))
+                .collect();
+            let mirrored: Vec<&&FileRecord> = gone
+                .iter()
+                .filter(|r| folder.mirror_local_deletes && r.state == "done" && !r.asset_id.is_empty())
+                .collect();
+            if mass_deletion(mirrored.len(), records.len()) {
+                self.event(
+                    "failed",
+                    &folder.path,
+                    &format!(
+                        "{} files vanished from this folder at once, so their deletion was not copied to Immich. If you meant it, turn off deletion mirroring for the folder and delete them in Immich",
+                        mirrored.len()
+                    ),
+                );
+            } else {
+                for record in gone {
+                    if folder.mirror_local_deletes && record.state == "done" && !record.asset_id.is_empty() {
+                        self.push(Job::Delete { path: record.path.clone(), folder_id: folder.id.clone() });
+                    } else {
+                        let _ = self.index.remove(&record.path);
+                    }
                 }
             }
+        } else if walk_errors > 0 {
+            self.event("failed", &folder.path, &format!("{walk_errors} entries could not be read; deletions were not checked this time"));
         }
         if !folder.method.uploads() {
             return Ok(());
@@ -463,7 +509,17 @@ impl Engine {
                     request.iter().map(|(id, _)| (id.clone(), Check::New)).collect()
                 }
             };
-            let verdicts: HashMap<String, Check> = verdicts.into_iter().collect();
+            let mut verdicts: HashMap<String, Check> = verdicts.into_iter().collect();
+            let trashed: Vec<String> = verdicts.values().filter_map(|v| match v { Check::Trashed(a) => Some(a.clone()), _ => None }).collect();
+            if !trashed.is_empty() {
+                let restored = remote::restore(&self.immich, &trashed).await.is_ok();
+                for v in verdicts.values_mut() {
+                    if let Check::Trashed(a) = v {
+                        // If the trash cannot be undone, upload the file again as new.
+                        *v = if restored { Check::Exists(a.clone()) } else { Check::New };
+                    }
+                }
+            }
             let mut existing_for_album = Vec::new();
             for (i, (path, size, mtime, sum)) in hashed.into_iter().enumerate() {
                 let path_text = path.to_string_lossy().into_owned();
@@ -543,28 +599,22 @@ impl Engine {
         self.touch();
     }
 
-    fn runnable(&self, slot: usize, job: &Job) -> bool {
-        let settings = self.settings.read().unwrap();
-        let state = self.state.lock().unwrap();
-        if state.manual_pause {
-            return false;
-        }
-        if job.manual() {
-            return slot < settings.concurrency.max(1) as usize;
-        }
-        settings.enabled && state.pause_reason.is_empty() && slot < settings.concurrency.max(1) as usize
-    }
-
+    /// Pick the first job this worker may run, deciding and removing it under
+    /// one lock so another worker cannot shift the queue in between.
     fn take(&self, slot: usize) -> Option<Job> {
-        let candidates: Vec<Job> = {
-            let state = self.state.lock().unwrap();
-            state.queue.iter().take(64).cloned().collect()
+        let (enabled, concurrency) = {
+            let settings = self.settings.read().unwrap();
+            (settings.enabled, settings.concurrency.max(1) as usize)
         };
-        let chosen = candidates.into_iter().position(|job| self.runnable(slot, &job))?;
-        let mut state = self.state.lock().unwrap();
-        if chosen >= state.queue.len() {
+        if slot >= concurrency {
             return None;
         }
+        let mut state = self.state.lock().unwrap();
+        if state.manual_pause {
+            return None;
+        }
+        let environment_ok = enabled && state.pause_reason.is_empty();
+        let chosen = state.queue.iter().take(64).position(|job| job.manual() || environment_ok)?;
         let job = state.queue.remove(chosen)?;
         state.queued.remove(&job.key());
         Some(job)
@@ -665,6 +715,10 @@ impl Engine {
             let verdict = remote::check(&self.immich, &[("0".to_string(), sum.clone())]).await?;
             let (asset, created) = match verdict.into_iter().next().map(|v| v.1) {
                 Some(Check::Exists(asset)) => (asset, false),
+                Some(Check::Trashed(asset)) => {
+                    remote::restore(&self.immich, std::slice::from_ref(&asset)).await?;
+                    (asset, false)
+                }
                 _ => {
                     let sidecar = if self.settings().upload_sidecars { files::sidecar_for(&path) } else { None };
                     (remote::upload(&self.immich, &path, sidecar.as_deref(), progress.clone()).await?, true)
@@ -743,20 +797,71 @@ impl Engine {
         }
     }
 
+    /// Whether the folder still has hashing or uploading to do: a moved file
+    /// only shows up at its new path once that work is finished.
+    fn folder_busy(&self, folder_id: &str) -> bool {
+        let state = self.state.lock().unwrap();
+        state.scanning > 0
+            || state.active.values().any(|a| a.direction == "upload")
+            || state.queue.iter().any(|job| matches!(job, Job::Upload { folder_id: Some(id), .. } if id == folder_id))
+    }
+
+    fn drop_deletes(&self, folder_id: &str, count: usize) {
+        {
+            let mut state = self.state.lock().unwrap();
+            state.queue.retain(|j| !matches!(j, Job::Delete { folder_id: f, .. } if f == folder_id));
+            let keys: HashSet<_> = state.queue.iter().map(|j| j.key()).collect();
+            state.queued = keys;
+        }
+        let path = self.folder(folder_id).map(|f| f.path).unwrap_or_default();
+        self.event(
+            "failed",
+            &path,
+            &format!("{count} files vanished from this folder at once, so their deletion was not copied to Immich"),
+        );
+    }
+
     async fn process_delete(self: &Arc<Self>, path: String, folder_id: String) {
-        // Give a move or an editor's save-by-replace time to finish.
+        // Give a move or an editor's save-by-replace time to finish, then wait
+        // for the folder's scans and uploads, which is when a moved photo
+        // appears at its new path.
         tokio::time::sleep(Duration::from_secs(10)).await;
-        if Path::new(&path).exists() {
+        if !definitely_gone(Path::new(&path)) {
+            return;
+        }
+        // Not now: come back later instead of holding this worker, which the
+        // folder's own uploads may need.
+        if self.folder_busy(&folder_id) {
+            let engine = self.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(15)).await;
+                engine.push(Job::Delete { path, folder_id });
+            });
+            return;
+        }
+        // Many deletions waiting for one folder at once look like a drive
+        // that went away, not a person deleting photos: drop them all.
+        let waiting = {
+            let state = self.state.lock().unwrap();
+            state.queue.iter().filter(|j| matches!(j, Job::Delete { folder_id: f, .. } if f == &folder_id)).count() + 1
+        };
+        let total = self.index.counts(&folder_id).map(|c| c.files as usize).unwrap_or(0);
+        if mass_deletion(waiting, total) {
+            self.drop_deletes(&folder_id, waiting);
             return;
         }
         let Some(folder) = self.folder(&folder_id) else { return };
+        if !folder_readable(Path::new(&folder.path)) {
+            return;
+        }
         let Ok(Some(record)) = self.index.get(&path) else { return };
-        let _ = self.index.remove(&path);
         if !folder.mirror_local_deletes || record.asset_id.is_empty() {
+            let _ = self.index.remove(&path);
             return;
         }
         // The same photo still lives in a folder that uploads: it moved there.
-        // A copy that a download folder made from the album does not count.
+        // A copy that a download folder made from the album does not count;
+        // a path whose existence cannot be checked counts as still there.
         let uploading: HashSet<String> = self
             .settings()
             .folders
@@ -769,13 +874,30 @@ impl Engine {
             .by_checksum(&record.checksum)
             .unwrap_or_default()
             .into_iter()
-            .any(|r| r.path != path && uploading.contains(&r.folder_id) && Path::new(&r.path).exists());
+            .any(|r| r.path != path && uploading.contains(&r.folder_id) && !definitely_gone(Path::new(&r.path)));
         if elsewhere {
+            let _ = self.index.remove(&path);
             return;
         }
         match remote::trash(&self.immich, std::slice::from_ref(&record.asset_id)).await {
-            Ok(()) => self.event("trashed", &path, "Deleted here, moved to the Immich trash"),
-            Err(err) => self.event("failed", &path, &format!("Could not mirror the deletion: {}", err.message)),
+            Ok(()) => {
+                let _ = self.index.remove(&path);
+                self.event("trashed", &path, "Deleted here, moved to the Immich trash");
+            }
+            Err(err) => {
+                // Keep the record so the deletion is not forgotten; try again later.
+                let mut retry = record.clone();
+                retry.attempts += 1;
+                let _ = self.index.put(&retry);
+                self.event("failed", &path, &format!("Could not mirror the deletion yet: {}", err.message));
+                if retry.attempts < MAX_ATTEMPTS as i64 {
+                    let engine = self.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_secs(300)).await;
+                        engine.push(Job::Delete { path, folder_id });
+                    });
+                }
+            }
         }
     }
 
@@ -817,7 +939,17 @@ impl Engine {
         let local_sums: HashSet<&str> = records.iter().map(|r| r.checksum.as_str()).filter(|s| !s.is_empty()).collect();
         let local_assets: HashSet<&str> = records.iter().map(|r| r.asset_id.as_str()).filter(|s| !s.is_empty()).collect();
         let dir = PathBuf::from(&folder.path);
-        tokio::fs::create_dir_all(&dir).await?;
+        if !dir.is_dir() {
+            // A missing folder is only created the first time; later it more
+            // likely means a drive that is not mounted.
+            let parent_ok = dir.parent().map(|p| p.is_dir()).unwrap_or(false);
+            if !records.is_empty() || !parent_ok {
+                return Err(Error::invalid("The folder is missing; is its drive mounted?"));
+            }
+            tokio::fs::create_dir_all(&dir).await?;
+        } else if !records.is_empty() && records.iter().all(|r| !Path::new(&r.path).exists()) && records.len() > 3 {
+            return Err(Error::invalid("None of the downloaded files are in the folder; is its drive mounted?"));
+        }
         for asset in &assets {
             if local_sums.contains(asset.checksum_hex.as_str()) || local_assets.contains(asset.id.as_str()) {
                 continue;
@@ -854,23 +986,40 @@ impl Engine {
             }
         }
         let current: HashSet<String> = assets.iter().map(|a| a.id.clone()).collect();
-        let previous = self.state.lock().unwrap().album_snapshots.insert(folder.id.clone(), current.clone());
+        // The snapshot belongs to this folder *and* this album: pointing the
+        // folder at another album must never read as "everything was removed".
+        let key = format!("{}:{}", folder.id, album);
+        let previous = self.state.lock().unwrap().album_snapshots.get(&key).cloned();
         if folder.mirror_remote_deletes {
-            if let Some(previous) = previous {
-                for record in records.iter().filter(|r| {
-                    !r.asset_id.is_empty() && previous.contains(&r.asset_id) && !current.contains(&r.asset_id)
-                }) {
+            if let Some(previous) = &previous {
+                let removed: Vec<&FileRecord> = records
+                    .iter()
+                    .filter(|r| !r.asset_id.is_empty() && previous.contains(&r.asset_id) && !current.contains(&r.asset_id))
+                    .collect();
+                if mass_deletion(removed.len(), previous.len()) {
+                    self.event(
+                        "failed",
+                        &folder.path,
+                        &format!("{} photos left the album at once, so the files here were kept", removed.len()),
+                    );
+                    return Ok(());
+                }
+                for record in removed {
                     let path = Path::new(&record.path);
                     if path.exists() {
                         match files::move_to_trash(path) {
                             Ok(_) => self.event("trashed", &record.path, "Removed from the album, moved to the trash here"),
-                            Err(err) => self.event("failed", &record.path, &format!("Could not move to the trash: {err}")),
+                            Err(err) => {
+                                self.event("failed", &record.path, &format!("Could not move to the trash: {err}"));
+                                continue;
+                            }
                         }
                     }
                     let _ = self.index.remove(&record.path);
                 }
             }
         }
+        self.state.lock().unwrap().album_snapshots.insert(key, current);
         Ok(())
     }
 
@@ -922,10 +1071,22 @@ impl Engine {
                     let _ = self.index.remove(&text);
                 }
                 _ => {
-                    // A whole directory went away: its files are in the index under it.
+                    // A whole directory went away: its files are in the index
+                    // under it. A folder that cannot be read, or most of a
+                    // folder at once, is a drive going away.
+                    if !folder_readable(Path::new(&folder.path)) {
+                        return;
+                    }
                     if let Ok(records) = self.index.under_folder(&folder.id) {
                         let prefix = format!("{text}/");
-                        for record in records.into_iter().filter(|r| r.path.starts_with(&prefix)) {
+                        let total = records.len();
+                        let under: Vec<FileRecord> = records.into_iter().filter(|r| r.path.starts_with(&prefix)).collect();
+                        let mirrored = under.iter().filter(|r| folder.mirror_local_deletes && r.state == "done" && !r.asset_id.is_empty()).count();
+                        if mass_deletion(mirrored, total) {
+                            self.drop_deletes(&folder.id, mirrored);
+                            return;
+                        }
+                        for record in under {
                             if folder.mirror_local_deletes && record.state == "done" && !record.asset_id.is_empty() {
                                 self.push(Job::Delete { path: record.path, folder_id: folder.id.clone() });
                             } else {
@@ -1090,5 +1251,41 @@ impl Engine {
                 .map(|r| json!({ "path": r.path, "name": file_name(Path::new(&r.path)), "error": r.error, "attempts": r.attempts }))
                 .collect(),
         )
+    }
+}
+
+fn folder_readable(path: &Path) -> bool {
+    std::fs::read_dir(path).is_ok()
+}
+
+/// Only a definite "does not exist" counts; an I/O error on a flaky share
+/// does not.
+fn definitely_gone(path: &Path) -> bool {
+    matches!(path.try_exists(), Ok(false))
+}
+
+/// So many files disappearing together looks like an unmounted drive or a
+/// mistake, not a person deleting photos.
+fn mass_deletion(count: usize, total: usize) -> bool {
+    count > 20 && count * 4 > total
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mass_deletion_guard() {
+        assert!(!mass_deletion(5, 10));
+        assert!(!mass_deletion(21, 1000));
+        assert!(mass_deletion(30, 100));
+        assert!(mass_deletion(100, 100));
+    }
+
+    #[test]
+    fn unreadable_folders_are_not_gone() {
+        assert!(!folder_readable(Path::new("/definitely/not/here")));
+        assert!(definitely_gone(Path::new("/definitely/not/here")));
+        assert!(!definitely_gone(Path::new("/")));
     }
 }

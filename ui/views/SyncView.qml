@@ -13,6 +13,7 @@ Item {
 
   readonly property string kind: "tiles"
   readonly property bool isForm: editor.visible
+  readonly property bool typing: quietStart.activeFocus || quietEnd.activeFocus
   readonly property var status: service.syncStatus || ({})
   readonly property var sync: service.settings && service.settings.sync ? service.settings.sync : ({})
   readonly property var folders: sync.folders || []
@@ -326,6 +327,7 @@ Item {
         }
         Text { text: "to"; color: root.theme.dim; font.family: root.theme.font; font.pixelSize: root.theme.small; anchors.verticalCenter: parent.verticalCenter }
         TextField {
+          id: quietEnd
           width: root.theme.space(80)
           placeholderText: "07:00"
           text: root.sync.quietEnd || ""

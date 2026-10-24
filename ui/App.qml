@@ -152,6 +152,7 @@ Item {
     if (menu.visible) { menu.close(); return }
     if (anyDialogOpen()) { closeDialogs(); return }
     if (helpOpen) { helpOpen = false; return }
+    if (infoPanel.typing) { infoPanel.finishEditing(); focusContent(); return }
     if (searchBar.focused) { searchBar.clear(); focusContent(); return }
     if (viewerAsset) { closeViewer(); return }
     if (settingsOpen) { settingsOpen = false; focusContent(); return }
@@ -169,9 +170,9 @@ Item {
   // ---------------------------------------------------------------- key context
 
   readonly property string keyContext: Keymap.contextFor({
-    dialog: anyDialogOpen(),
+    dialog: anyDialogOpen() || helpOpen,
     page: settingsOpen || needsSetup || (contentLoader.item && contentLoader.item.isForm === true),
-    searchFocused: searchBar.focused || (contentLoader.item && contentLoader.item.typing === true),
+    searchFocused: searchBar.focused || infoPanel.typing || (contentLoader.item && contentLoader.item.typing === true),
     viewer: viewerAsset !== null,
     tiles: contentLoader.item ? contentLoader.item.kind === "tiles" : false
   })
@@ -355,18 +356,25 @@ Item {
     }
   }
 
+  // Apply a change the server accepted to the grid and the viewer. The grid
+  // may belong to a view that was closed while the request ran; then there is
+  // nothing on screen to update, but the caller's toast must still show.
   function afterChange(grid, assets, change, leaves) {
     var list = ids(assets)
-    if (leaves && grid) {
-      if (viewerAsset && list.indexOf(viewerAsset.id) >= 0) {
-        var nextCursor = grid.neighbor(grid.cursor, 1) || grid.neighbor(grid.cursor, -1)
-        var nextAsset = nextCursor ? grid.assetAt(nextCursor) : null
-        grid.dropAssets(list)
-        if (nextAsset) { grid.setCursorTo(nextAsset); viewerAsset = nextAsset }
-        else closeViewer()
-      } else grid.dropAssets(list)
-    } else if (grid) {
-      grid.patchAssets(list, change)
+    try {
+      if (leaves && grid) {
+        if (viewerAsset && list.indexOf(viewerAsset.id) >= 0) {
+          var nextCursor = grid.neighbor(grid.cursor, 1) || grid.neighbor(grid.cursor, -1)
+          var nextAsset = nextCursor ? grid.assetAt(nextCursor) : null
+          grid.dropAssets(list)
+          if (nextAsset) { grid.setCursorTo(nextAsset); viewerAsset = nextAsset }
+          else closeViewer()
+        } else grid.dropAssets(list)
+      } else if (grid) {
+        grid.patchAssets(list, change)
+      }
+    } catch (e) {
+      if (viewerAsset && list.indexOf(viewerAsset.id) >= 0 && leaves) viewerAsset = null
     }
     if (viewerAsset && list.indexOf(viewerAsset.id) >= 0 && !leaves)
       viewerAsset = Object.assign({}, viewerAsset, change)
@@ -388,7 +396,7 @@ Item {
     service.call("asset.update", { ids: ids(assets), visibility: archive ? "archive" : "timeline" }, function(r, e) {
       if (e) return root.failed(e)
       var leaves = !root.albumPage
-      root.afterChange(grid, assets, { visibility: archive ? "archive" : "timeline" }, leaves)
+      Qt.callLater(function() { root.afterChange(grid, assets, { visibility: archive ? "archive" : "timeline" }, leaves) })
       toast.show((archive ? "Archived " : "Unarchived ") + Format.count(assets.length, "photo"), {
         actionText: "Undo",
         action: function() {
@@ -405,7 +413,7 @@ Item {
   function trash(assets, grid) {
     service.call("asset.trash", { ids: ids(assets) }, function(r, e) {
       if (e) return root.failed(e)
-      root.afterChange(grid, assets, {}, true)
+      Qt.callLater(function() { root.afterChange(grid, assets, {}, true) })
       toast.show("Moved " + Format.count(assets.length, "photo") + " to the trash", {
         actionText: "Undo",
         action: function() {
@@ -421,8 +429,8 @@ Item {
   function restore(assets, grid) {
     service.call("asset.restore", { ids: ids(assets) }, function(r, e) {
       if (e) return root.failed(e)
-      root.afterChange(grid, assets, {}, true)
       toast.show("Restored " + Format.count(assets.length, "photo"))
+      root.afterChange(grid, assets, {}, true)
     })
   }
 
@@ -434,8 +442,8 @@ Item {
       onConfirm: function() {
         root.service.call("asset.deleteForever", { ids: root.ids(assets) }, function(r, e) {
           if (e) return root.failed(e)
-          root.afterChange(grid, assets, {}, true)
           toast.show("Deleted " + Format.count(assets.length, "photo"))
+          root.afterChange(grid, assets, {}, true)
         })
       }
     })

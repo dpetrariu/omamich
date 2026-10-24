@@ -21,6 +21,7 @@ Item {
   signal albumOpened(var album)
   signal placeOpened(var place)
   signal tagOpened(var tag)
+  signal editDate()
 
   readonly property var exif: details && details.exif ? details.exif : ({})
   readonly property bool typing: description.activeFocus
@@ -37,7 +38,7 @@ Item {
     var text = editingText
     editingId = ""
     if (text === savedText) return
-    service.call("asset.update", { ids: [id], description: text }, function(r, e) {
+    service.call("asset.update", { ids: [id], description: text }, function(r, e) { if (!root) return;
       if (e) root.toast(e.message, "error")
       else root.changed()
     })
@@ -62,7 +63,7 @@ Item {
     albums = []
     if (!asset || width === 0) return
     var id = asset.id
-    service.call("asset.albums", { id: id }, function(r, e) {
+    service.call("asset.albums", { id: id }, function(r, e) { if (!root) return;
       if (root.asset && root.asset.id === id && !e) root.albums = r
     })
   }
@@ -71,7 +72,7 @@ Item {
   function setRating(stars) {
     if (!details) return
     var next = Number(exif.rating || 0) === stars ? 0 : stars
-    service.call("asset.update", { ids: [details.id], rating: next }, function(r, e) {
+    service.call("asset.update", { ids: [details.id], rating: next }, function(r, e) { if (!root) return;
       if (e) root.toast(e.message, "error")
       else root.changed()
     })
@@ -186,6 +187,8 @@ Item {
         visible: !!root.details
         title: root.details ? Format.dateLabel(root.details.localDateTime || root.details.fileCreatedAt) : ""
         detail: root.details ? Format.timeLabel(root.details.localDateTime || root.details.fileCreatedAt) + (root.exif.timeZone ? "  " + root.exif.timeZone : "") : ""
+        link: "Edit..."
+        onLinkClicked: root.editDate()
       }
 
       InfoRow {

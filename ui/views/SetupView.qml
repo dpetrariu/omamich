@@ -16,7 +16,7 @@ Item {
   property bool busy: false
 
   Component.onCompleted: {
-    service.call("auth.mimick", { apply: false }, function(r, e) { if (root && !e) root.mimick = r })
+    service.call("auth.mimick", { apply: false }, function(r, e) { if (!root) return; if (root && !e) root.mimick = r })
     url.text = service.settings && service.settings.serverUrl ? service.settings.serverUrl : ""
   }
 
@@ -26,13 +26,13 @@ Item {
     if (!url.text.trim()) { error = "Enter your Immich address"; return }
     if (!key.text.trim() && !service.hasKey) { error = "Paste an API key"; return }
     busy = true
-    service.call("auth.test", { serverUrl: url.text, key: key.text }, function(r, e) {
+    service.call("auth.test", { serverUrl: url.text, key: key.text }, function(r, e) { if (!root) return;
       if (e) { root.busy = false; root.error = e.message; return }
       if (!r.lan.ok) { root.busy = false; root.error = r.lan.error; return }
       root.service.updateSettings({ serverUrl: url.text, serverEnabled: true }, function(s, e2) {
         if (e2) { root.busy = false; root.error = e2.message; return }
         if (!key.text.trim()) { root.busy = false; root.service.refreshServer(); return }
-        root.service.call("auth.setKey", { key: key.text }, function(k, e3) {
+        root.service.call("auth.setKey", { key: key.text }, function(k, e3) { if (!root) return;
           root.busy = false
           if (e3) { root.error = e3.message; return }
           root.service.refreshServer()
@@ -43,7 +43,7 @@ Item {
 
   function importMimick() {
     busy = true
-    service.call("auth.mimick", { apply: true }, function(r, e) {
+    service.call("auth.mimick", { apply: true }, function(r, e) { if (!root) return;
       root.busy = false
       if (e) { root.error = e.message; return }
       root.service.refreshServer()

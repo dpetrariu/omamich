@@ -38,7 +38,7 @@ Item {
   }
 
   function loadFailed() {
-    service.call("sync.failed", {}, function(r, e) { if (!e) root.failedFiles = r })
+    service.call("sync.failed", {}, function(r, e) { if (!root) return; if (!e) root.failedFiles = r })
   }
 
   Flickable {
@@ -152,7 +152,7 @@ Item {
               text: root.status.paused ? "Resume" : "Pause"
               icon: root.status.paused ? "play" : "pause"
               fontSize: root.theme.small
-              onClicked: root.service.call("sync.pause", { paused: !root.status.paused }, function(r) { if (r) root.service.applySyncStatus(r) })
+              onClicked: root.service.call("sync.pause", { paused: !root.status.paused }, function(r) { if (!root) return; if (r) root.service.applySyncStatus(r) })
             }
             TextButton {
               theme: root.theme
@@ -160,7 +160,7 @@ Item {
               icon: "refresh"
               fontSize: root.theme.small
               enabled: root.sync.enabled
-              onClicked: root.service.call("sync.rescan", {}, function(r) { if (r) root.service.applySyncStatus(r) })
+              onClicked: root.service.call("sync.rescan", {}, function(r) { if (!root) return; if (r) root.service.applySyncStatus(r) })
             }
             TextButton {
               visible: root.status.failed > 0
@@ -168,7 +168,7 @@ Item {
               text: "Retry " + Format.count(root.status.failed, "failed file")
               icon: "restore"
               fontSize: root.theme.small
-              onClicked: root.service.call("sync.retryFailed", {}, function(r) { root.toast("Retrying " + Format.count(r, "file"), "info") })
+              onClicked: root.service.call("sync.retryFailed", {}, function(r) { if (!root) return; root.toast("Retrying " + Format.count(r, "file"), "info") })
             }
             TextButton {
               visible: root.status.failed > 0
@@ -182,7 +182,7 @@ Item {
               theme: root.theme
               text: "Clear queue"
               fontSize: root.theme.small
-              onClicked: root.service.call("sync.clearQueue", {}, function(r) { if (r) root.service.applySyncStatus(r) })
+              onClicked: root.service.call("sync.clearQueue", {}, function(r) { if (!root) return; if (r) root.service.applySyncStatus(r) })
             }
           }
           Repeater {
@@ -296,7 +296,7 @@ Item {
                 confirmText: "Stop syncing",
                 danger: false,
                 onConfirm: function() {
-                  root.service.call("sync.folderRemove", { id: modelData.id }, function(r, e) {
+                  root.service.call("sync.folderRemove", { id: modelData.id }, function(r, e) { if (!root) return;
                     if (e) root.toast(e.message, "error")
                     else root.service.applySettingsResponse(r)
                   })

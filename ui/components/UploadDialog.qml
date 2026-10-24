@@ -19,7 +19,7 @@ Item {
     onAccepted: {
       var paths = []
       for (var i = 0; i < selectedFiles.length; i++) paths.push(String(selectedFiles[i]))
-      root.service.call("sync.uploadFiles", { paths: paths, albumId: root.albumId }, function(r, e) {
+      root.service.call("sync.uploadFiles", { paths: paths, albumId: root.albumId }, function(r, e) { if (!root) return;
         root.queued(e ? 0 : r.queued)
       })
     }

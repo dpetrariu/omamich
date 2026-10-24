@@ -81,6 +81,19 @@ Item {
     return "ok"
   }
 
+  // `omarchy-shell shell call omamich screenshot /path.png` saves what the
+  // window shows, for bug reports and the UI tests.
+  function screenshot(path) {
+    var target = String(path || "")
+    if (target.indexOf("/") !== 0 || !/\.png$/.test(target)) return "refused"
+    frame.grabToImage(function(result) { result.saveToFile(target) })
+    return "ok"
+  }
+
+  // Handles for the off-screen UI tests, which drive dialogs directly.
+  readonly property var testHooks: ({ prompt: promptDialog, confirm: confirmDialog, picker: pickerDialog,
+    share: shareDialog, albumPeople: albumPeople, viewer: viewer, info: infoPanel, toast: toast })
+
   function requestClose() {
     if (shell && typeof shell.hide === "function") shell.hide(pluginId)
     else close()
@@ -178,7 +191,7 @@ Item {
   })
 
   function anyDialogOpen() {
-    return promptDialog.opened || confirmDialog.opened || pickerDialog.opened || shareDialog.opened
+    return promptDialog.opened || confirmDialog.opened || pickerDialog.opened || shareDialog.opened || albumPeople.opened
   }
 
   function closeDialogs() {
@@ -186,6 +199,7 @@ Item {
     confirmDialog.close()
     pickerDialog.close()
     shareDialog.close()
+    albumPeople.close()
     focusContent()
   }
 
@@ -275,8 +289,18 @@ Item {
     viewerAsset = asset
   }
 
+  // A change that moves photos in the timeline (a new date) reloads the
+  // grid once the viewer closes, so the open photo does not jump away.
+  property bool reloadAfterViewer: false
+
   function closeViewer() {
     viewerAsset = null
+    if (reloadAfterViewer) {
+      reloadAfterViewer = false
+      refreshContent()
+      focusContent()
+      return
+    }
     var grid = activeGrid()
     if (grid) grid.reveal()
     focusContent()
@@ -353,6 +377,7 @@ Item {
     case "tag": tagAssets(assets); return
     case "share": shareAssets(assets); return
     case "download": download(assets); return
+    case "editDate": editDate(assets, grid); return
     }
   }
 
@@ -445,6 +470,49 @@ Item {
           toast.show("Deleted " + Format.count(assets.length, "photo"))
           root.afterChange(grid, assets, {}, true)
         })
+      }
+    })
+  }
+
+  function pad2(n) { return n < 10 ? "0" + n : String(n) }
+
+  // "2024-05-01 14:30" in local time → ISO 8601 with this computer's offset.
+  function parseLocalDate(text) {
+    var m = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*$/.exec(String(text || ""))
+    if (!m) return null
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 12), Number(m[5] || 0), Number(m[6] || 0))
+    if (isNaN(d.getTime()) || d.getMonth() !== Number(m[2]) - 1) return null
+    var offset = -d.getTimezoneOffset()
+    var sign = offset >= 0 ? "+" : "-"
+    offset = Math.abs(offset)
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "T" + pad2(d.getHours()) + ":"
+      + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()) + ".000" + sign + pad2(Math.floor(offset / 60)) + ":" + pad2(offset % 60)
+  }
+
+  function editDate(assets, grid) {
+    if (!assets || assets.length === 0) return
+    var first = assets[0]
+    var current = viewer.details && viewer.details.id === first.id ? (viewer.details.localDateTime || viewer.details.fileCreatedAt) : first.fileCreatedAt
+    var p = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(String(current || ""))
+    promptDialog.ask({
+      title: assets.length === 1 ? "Date taken" : "Date taken for " + Format.count(assets.length, "photo"),
+      subtitle: assets.length === 1 ? "In this computer's time zone. The photo moves to its new place in the timeline."
+        : "Every selected photo gets this date and time, in this computer's time zone.",
+      value: p ? p[1] + " " + p[2] : "",
+      placeholder: "YYYY-MM-DD HH:MM",
+      confirmText: "Set date",
+      onAccept: function(text) {
+        var iso = root.parseLocalDate(text)
+        if (!iso) return "Dates look like 2024-05-01 14:30"
+        root.service.call("asset.update", { ids: root.ids(assets), dateTimeOriginal: iso }, function(r, e) {
+          if (e) return promptDialog.finish(e.message)
+          promptDialog.finish("")
+          toast.show("Date changed" + (assets.length > 1 ? " for " + Format.count(assets.length, "photo") : ""))
+          viewer.reloadDetails()
+          if (root.viewerAsset) root.reloadAfterViewer = true
+          else root.refreshContent()
+        })
+        return "pending"
       }
     })
   }
@@ -613,6 +681,7 @@ Item {
       items.push({ id: "tag", label: "Tag...", icon: "tag", shortcut: "t" })
       items.push({ id: "share", label: "Share link...", icon: "link", shortcut: "s" })
       items.push({ id: "download", label: many ? "Download originals" : "Download original", icon: "download", shortcut: "D" })
+      items.push({ id: "editDate", label: "Edit date...", icon: "calendar", shortcut: "e" })
       if (albumPage) {
         items.push({ separator: true })
         if (!many) items.push({ id: "cover", label: "Use as album cover", icon: "image" })
@@ -690,6 +759,11 @@ Item {
     onVisibleChanged: {
       if (!visible && root.opened && !root.closingFromHost) root.requestClose()
     }
+
+    // Everything in the window, as one item: it can be grabbed as an image.
+    Item {
+      id: frame
+      anchors.fill: parent
 
     Item {
       id: keyPark
@@ -910,6 +984,7 @@ Item {
         onAlbumOpened: function(album) { root.closeViewer(); root.go("albums"); root.push({ kind: "album", album: album }) }
         onPlaceOpened: function(place) { root.closeViewer(); root.go("places"); root.push({ kind: "place", place: place }) }
         onTagOpened: function(tag) { root.closeViewer(); root.go("tags"); root.push({ kind: "tag", tag: tag }) }
+        onEditDate: root.editDate([root.viewerAsset], root.activeGrid())
       }
 
       Viewer {
@@ -992,11 +1067,21 @@ Item {
     PopupMenu {
       id: menu
       theme: appTheme
-      parent: window.contentItem
+      parent: frame
       onClosed: root.focusContent()
     }
 
     PromptDialog { id: promptDialog; theme: appTheme; onDismissed: root.focusContent() }
+    AlbumPeopleDialog {
+      id: albumPeople
+      theme: appTheme
+      service: root.service
+      onDismissed: root.focusContent()
+      onAlbumUpdated: function(a) {
+        if (root.page && root.page.kind === "album" && root.page.album.id === a.id) root.replacePage({ kind: "album", album: a })
+        root.service.loadAlbums(true)
+      }
+    }
     ConfirmDialog { id: confirmDialog; theme: appTheme; onDismissed: root.focusContent() }
     PickerDialog { id: pickerDialog; theme: appTheme; onDismissed: root.focusContent() }
     ShareDialog {
@@ -1035,6 +1120,7 @@ Item {
         drop.accept()
       }
     }
+    }
   }
 
   // ---------------------------------------------------------------- views
@@ -1044,7 +1130,7 @@ Item {
     PhotosView {
       theme: appTheme; service: root.service; zoom: root.zoom
       title: "Photos"
-      scope: ({})
+      scope: ({ withPartners: true })
       emptyText: "Photos you add to Immich, or that folder sync uploads, appear here."
       onOpenAsset: function(a) { root.openViewer(a) }
       onContextRequested: function(a, item, x, y) { root.showPhotoMenu(a, item, x, y) }
@@ -1125,6 +1211,7 @@ Item {
       onContextRequested: function(a, item, x, y) { root.showPhotoMenu(a, item, x, y) }
       onBack: root.pop()
       onShare: root.shareAlbum(album)
+      onPeople: albumPeople.ask(album)
       onRename: {
         var current = album
         promptDialog.ask({
@@ -1290,6 +1377,8 @@ Item {
       onCopied: function(url) { root.copy(url); toast.show("Link copied") }
       onToast: function(text, tone) { toast.show(text, { tone: tone }) }
       onConfirm: function(options) { confirmDialog.ask(options) }
+      onPick: function(options) { pickerDialog.ask(options) }
+      onPickFinished: function(message) { pickerDialog.finish(message) }
     }
   }
   Component {
@@ -1345,11 +1434,13 @@ Item {
   function showAlbumMenu(album, item) {
     showMenu([
       { id: "open", label: "Open", icon: "albums" },
+      { id: "people", label: "People...", icon: "people" },
       { id: "share", label: "Share link...", icon: "link" },
       { separator: true },
       { id: "delete", label: "Delete album...", icon: "trash", danger: true }
     ], item, function(id) {
       if (id === "open") root.push({ kind: "album", album: album })
+      else if (id === "people") albumPeople.ask(album)
       else if (id === "share") root.shareAlbum(album)
       else if (id === "delete") confirmDialog.ask({
         title: "Delete “" + album.albumName + "”?",

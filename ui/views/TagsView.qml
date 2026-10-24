@@ -43,7 +43,7 @@ Item {
       title: "New tag", placeholder: "Name, or parent/child for a nested tag", confirmText: "Create",
       onAccept: function(text) {
         if (!text.trim()) return "Tags need a name"
-        root.service.call("tag.create", { name: text.trim() }, function(r, e) {
+        root.service.call("tag.create", { name: text.trim() }, function(r, e) { if (!root) return;
           root.promptFinished(e ? e.message : "")
           if (!e) root.service.loadTags()
         })
@@ -128,7 +128,7 @@ Item {
             title: "Colour for “" + (row.modelData.value || row.modelData.name) + "”",
             value: row.modelData.color || "", placeholder: "#4a90d9", confirmText: "Save",
             onAccept: function(text) {
-              root.service.call("tag.update", { id: row.modelData.id, color: text.trim() }, function(r, e) {
+              root.service.call("tag.update", { id: row.modelData.id, color: text.trim() }, function(r, e) { if (!root) return;
                 root.promptFinished(e ? e.message : "")
                 if (!e) root.service.loadTags()
               })
@@ -146,7 +146,7 @@ Item {
             message: "The tag is removed from every photo. The photos stay.",
             confirmText: "Delete tag",
             onConfirm: function() {
-              root.service.call("tag.delete", { id: row.modelData.id }, function(r, e) {
+              root.service.call("tag.delete", { id: row.modelData.id }, function(r, e) { if (!root) return;
                 if (e) root.toast(e.message, "error")
                 else root.service.loadTags()
               })

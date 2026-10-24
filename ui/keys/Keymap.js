@@ -59,6 +59,7 @@ var BINDINGS = [
   { id: "addToAlbum", changes: true, keys: ["Shift+A"], contexts: PHOTO, group: "Photos", label: "Add to an album..." },
   { id: "tag", changes: true, keys: ["t"], contexts: PHOTO, group: "Photos", label: "Tag..." },
   { id: "share", changes: true, keys: ["s"], contexts: PHOTO, group: "Photos", label: "Share a link..." },
+  { id: "editDate", changes: true, keys: ["e"], contexts: PHOTO, group: "Photos", label: "Edit the date taken..." },
   { id: "download", changes: true, keys: ["Shift+D"], contexts: PHOTO, group: "Photos", label: "Download the original" },
   { id: "rate", changes: true, keys: ["1", "2", "3", "4", "5"], contexts: ["viewer"], group: "Photos", label: "Rate 1 to 5 stars" },
 

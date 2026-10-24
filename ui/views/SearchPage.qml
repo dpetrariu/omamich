@@ -112,7 +112,7 @@ Item {
       ? "Smart search looks for what is in the photo. Try other words, or search by file name."
       : "Try other words or another way of matching."
     pager: root.entry ? function(page, done) {
-      root.service.call("search", { mode: root.entry.mode, query: root.entry.query, page: page, size: 150, filters: root.filters }, function(r, e) {
+      root.service.call("search", { mode: root.entry.mode, query: root.entry.query, page: page, size: 150, filters: root.filters }, function(r, e) { if (!root) return;
         if (e) return done([], false, e)
         done(r.items, r.nextPage !== null && r.nextPage !== undefined && r.items.length > 0, null)
       })

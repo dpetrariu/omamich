@@ -19,6 +19,7 @@ Item {
   signal contextRequested(var asset, Item item, real x, real y)
   signal back()
   signal share()
+  signal people()
   signal rename()
   signal describe()
   signal remove()
@@ -42,13 +43,15 @@ Item {
       return parts.join("  ·  ")
     }
     actions: [
-      { id: "share", label: "Share...", icon: "link" },
+      { id: "people", label: "People...", icon: "people" },
+      { id: "share", label: "Share link...", icon: "link" },
       { id: "order", label: root.album && root.album.order === "asc" ? "Oldest first" : "Newest first", icon: "calendar" },
       { id: "more", label: "", icon: "more" }
     ]
     onBack: root.back()
     onActionTriggered: function(id, button) {
       if (id === "share") root.share()
+      else if (id === "people") root.people()
       else if (id === "order") root.toggleOrder()
       else if (id === "more") moreMenu.openBelow(button)
     }

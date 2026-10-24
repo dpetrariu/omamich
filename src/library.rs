@@ -377,6 +377,18 @@ pub async fn album_share(app: &App, params: &Value) -> Result<Value> {
     Ok(slim_album(&album))
 }
 
+pub async fn album_set_role(app: &App, params: &Value) -> Result<Value> {
+    let id = id_param(params, "id")?;
+    let user = id_param(params, "userId")?;
+    let role = match str_param(params, "role") {
+        "viewer" => "viewer",
+        "editor" => "editor",
+        _ => return Err(Error::invalid("A role is viewer or editor")),
+    };
+    app.immich.put(&format!("/api/albums/{id}/user/{user}"), json!({ "role": role })).await?;
+    album_get(app, params).await
+}
+
 pub async fn album_unshare(app: &App, params: &Value) -> Result<Value> {
     let id = id_param(params, "id")?;
     let user = str_param(params, "userId");

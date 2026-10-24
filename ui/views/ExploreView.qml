@@ -25,7 +25,7 @@ Item {
   function handleKey(id) {}
 
   function load() {
-    service.call("explore", {}, function(r, e) {
+    service.call("explore", {}, function(r, e) { if (!root) return;
       root.error = e ? e.message : ""
       if (!e) root.explore = r
     })

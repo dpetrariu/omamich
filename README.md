@@ -6,9 +6,9 @@ Your [Immich](https://immich.app) photo library in a native Omarchy window, plus
 
 - **Timeline** of the whole library, month by month, in justified rows with day headers. Months load as they come near the screen; a scrubber on the right jumps through the years. Libraries of 100,000+ photos scroll the same as small ones.
 - **Viewer** with zoom and pan (full size loads when you zoom in), video playback, live photos, slideshow, rating, and a details panel: date, file, camera and lens, place with a map link, people, albums, tags, description.
-- **People** (rename, birthday, favourite, hide, merge), **Places**, **Explore**, **Albums** (create, rename, describe, sort, cover, share, delete), **Favourites**, **Tags**, **Folders** (the server's import folders), **Archive** and **Trash** (restore, empty).
+- **People** (rename, birthday, favourite, hide, merge), **Places**, **Explore**, **Albums** (create, rename, describe, sort, cover, share with people as viewer or editor, public links, delete), **Partners** (share your library, show a partner's photos in your timeline), **Favourites**, **Tags**, **Folders** (the server's import folders), **Archive** and **Trash** (restore, empty).
 - **Search**: smart (CLIP), file name, description and text-in-photo (OCR), with photo/video, favourite and not-in-album filters. Prefixes work in the search field: `file:IMG_2041`, `ocr:receipt`, `desc:holiday`.
-- **Actions** on a photo or a selection: favourite, archive, trash, delete permanently, add to album, tag, shared link, download the original. Undo for archive and trash.
+- **Actions** on a photo or a selection: favourite, archive, trash, delete permanently, add to album, tag, shared link, edit the date taken, download the original. Undo for archive and trash.
 - **Folder sync** like Mimick: watch folders, upload new photos and videos, skip what Immich already has (SHA-1 check), put each folder into an album, download an album into a folder, or both ways. Optional deletion mirroring in either direction (local deletes go to the Immich trash, album removals go to the desktop trash). Pauses on metered connections, on battery and during quiet hours. Hand-picked uploads: the upload button, dropping files on the window, or "Open with → Upload to Immich" in the file manager.
 - **Bar icon** with a dot while sync works and the urgent colour when it needs attention; desktop notifications for sync failures (or every batch).
 
@@ -44,7 +44,7 @@ Scripts and keybindings can move around (never change anything) over IPC: `omarc
 ## Development
 
 ```bash
-make test        # Rust unit tests, sync and library end-to-end tests against a mock Immich, UI logic tests
+make test        # Rust unit tests; sync, library and off-screen UI end-to-end tests against a mock Immich; UI logic tests
 make install     # rebuild bin/omamich
 omarchy restart shell   # the shell caches QML; restart it after UI edits
 qs log -i "$(ls -t /run/user/$UID/quickshell/by-id/ | head -1)" -f | grep omamich

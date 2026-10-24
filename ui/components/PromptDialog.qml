@@ -41,6 +41,12 @@ Sheet {
     } else opened = false
   }
 
+  // Fill in and submit, as typing and pressing Enter would.
+  function submitText(text) {
+    field.text = text
+    submit()
+  }
+
   function finish(message) {
     busy = false
     if (message) error = message

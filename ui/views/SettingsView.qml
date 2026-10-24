@@ -27,14 +27,14 @@ Item {
   }
 
   function loadCache() {
-    service.call("cache.info", {}, function(r, e) { if (!e) root.cache = r })
+    service.call("cache.info", {}, function(r, e) { if (!root) return; if (!e) root.cache = r })
   }
 
   function testConnection(then) {
     testing = true
     test = null
     error = ""
-    service.call("auth.test", { serverUrl: lan.text, externalUrl: wan.text, key: key.text }, function(r, e) {
+    service.call("auth.test", { serverUrl: lan.text, externalUrl: wan.text, key: key.text }, function(r, e) { if (!root) return;
       root.testing = false
       if (e) { root.error = e.message; return }
       root.test = r
@@ -49,7 +49,7 @@ Item {
       root.service.updateSettings({ serverUrl: lan.text, externalUrl: wan.text, serverEnabled: lan.text.trim() !== "", externalEnabled: wan.text.trim() !== "" }, function(s, e) {
         if (e) { root.error = e.message; return }
         if (key.text.trim()) {
-          root.service.call("auth.setKey", { key: key.text }, function(k, e2) {
+          root.service.call("auth.setKey", { key: key.text }, function(k, e2) { if (!root) return;
             if (e2) { root.error = e2.message; return }
             key.text = ""
             root.toast("Saved. The key is in your " + (k.storage === "keyring" ? "keyring" : "private config folder"), "info")
@@ -130,7 +130,7 @@ Item {
         TextButton {
           theme: root.theme
           text: "Use Mimick's settings"
-          onClicked: root.service.call("auth.mimick", { apply: true }, function(r, e) {
+          onClicked: root.service.call("auth.mimick", { apply: true }, function(r, e) { if (!root) return;
             if (e) return root.toast(e.message, "error")
             lan.text = r.serverUrl
             wan.text = r.externalUrl
@@ -180,7 +180,7 @@ Item {
           theme: root.theme
           text: "Clear cache"
           fontSize: root.theme.small
-          onClicked: root.service.call("cache.clear", {}, function(r) { root.loadCache(); root.toast("Freed " + Format.bytes(r.freed), "info") })
+          onClicked: root.service.call("cache.clear", {}, function(r) { if (!root) return; root.loadCache(); root.toast("Freed " + Format.bytes(r.freed), "info") })
         }
       }
 
@@ -208,7 +208,7 @@ Item {
         text: "Forget the API key..."
         danger: true
         fontSize: root.theme.small
-        onClicked: root.service.call("auth.clearKey", {}, function() { root.service.loadSettings(); root.toast("The key was removed from this computer", "info") })
+        onClicked: root.service.call("auth.clearKey", {}, function() { if (!root) return; root.service.loadSettings(); root.toast("The key was removed from this computer", "info") })
       }
     }
   }

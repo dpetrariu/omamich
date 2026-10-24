@@ -91,7 +91,7 @@ Item {
     }
     indexLoading = true
     var gen = generation
-    service.call("timeline.buckets", { scope: scope }, function(result, err) {
+    service.call("timeline.buckets", { scope: scope }, function(result, err) { if (!root) return;
       if (!root || gen !== root.generation) return
       root.indexLoading = false
       if (err) {
@@ -149,7 +149,7 @@ Item {
     l[key] = true
     loading = l
     var gen = generation
-    service.call("timeline.bucket", { scope: scope, timeBucket: key }, function(result, err) {
+    service.call("timeline.bucket", { scope: scope, timeBucket: key }, function(result, err) { if (!root) return;
       if (!root || gen !== root.generation) return
       var l2 = Object.assign({}, root.loading)
       delete l2[key]

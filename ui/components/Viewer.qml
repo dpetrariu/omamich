@@ -45,7 +45,7 @@ Item {
 
   function loadDetails() {
     var id = asset.id
-    service.call("asset.get", { id: id }, function(r, e) {
+    service.call("asset.get", { id: id }, function(r, e) { if (!root) return;
       if (!root.asset || root.asset.id !== id) return
       if (!e) root.details = r
     })

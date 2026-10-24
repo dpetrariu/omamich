@@ -23,16 +23,44 @@ Item {
   signal copied(string url)
   signal toast(string text, string tone)
   signal confirm(var options)
+  signal pick(var options)
+  signal pickFinished(string message)
+
+  function addPartner() {
+    root.service.call("users.list", {}, function(users, e) { if (!root) return;
+      if (e) return root.toast(e.message, "error")
+      var me = root.service.user ? root.service.user.id : ""
+      var taken = {}
+      for (var i = 0; i < root.partners.sharedBy.length; i++) taken[root.partners.sharedBy[i].id] = true
+      var items = users.filter(function(u) { return u.id !== me && !taken[u.id] }).map(function(u) {
+        return { id: u.id, label: u.name || u.email, detail: u.email }
+      })
+      root.pick({
+        title: "Share your library with…",
+        subtitle: "They will see all your photos and videos except archived ones.",
+        placeholder: "Find someone on this server",
+        items: items,
+        emptyText: "Nobody else on this server to share with.",
+        onPick: function(item) {
+          root.service.call("partner.add", { userId: item.id }, function(r, e2) { if (!root) return;
+            root.pickFinished(e2 ? e2.message : "")
+            if (!e2) root.reload()
+          })
+          return "pending"
+        }
+      })
+    })
+  }
 
   function handleKey(id) {}
   function reload() {
     loading = true
-    service.call("sharedLinks.list", {}, function(r, e) {
+    service.call("sharedLinks.list", {}, function(r, e) { if (!root) return;
       root.loading = false
       root.error = e ? e.message : ""
       if (!e) root.links = r
     })
-    service.call("partners.list", {}, function(r, e) { if (!e) root.partners = r })
+    service.call("partners.list", {}, function(r, e) { if (!root) return; if (!e) root.partners = r })
     service.loadAlbums(true)
   }
   Component.onCompleted: reload()
@@ -151,7 +179,7 @@ Item {
                 message: "Anyone who has it will no longer be able to open it.",
                 confirmText: "Delete link",
                 onConfirm: function() {
-                  root.service.call("sharedLink.delete", { id: link.modelData.id }, function(r, e) {
+                  root.service.call("sharedLink.delete", { id: link.modelData.id }, function(r, e) { if (!root) return;
                     if (e) root.toast(e.message, "error")
                     else root.reload()
                   })
@@ -185,23 +213,73 @@ Item {
         }
       }
 
-      SectionTitle { theme: root.theme; text: "Partners" }
+      SectionTitle {
+        theme: root.theme
+        text: "Partners"
+        action: "Share my library..."
+        onActionClicked: root.addPartner()
+      }
       Text {
         width: parent.width
         wrapMode: Text.Wrap
-        text: {
-          var by = root.partners.sharedBy.map(function(p) { return p.name || p.email })
-          var with_ = root.partners.sharedWith.map(function(p) { return p.name || p.email })
-          var lines = []
-          lines.push(by.length ? "You share your library with " + by.join(", ") + "." : "You do not share your library with a partner.")
-          lines.push(with_.length ? with_.join(", ") + " share their library with you." : "Nobody shares their library with you.")
-          return lines.join("\n")
-        }
-        textFormat: Text.PlainText
+        text: "A partner sees all your photos and videos (not archived ones), and can show them in their own timeline."
         color: root.theme.dim
         font.family: root.theme.font
         font.pixelSize: root.theme.small
-        lineHeight: 1.3
+      }
+      Text {
+        visible: root.partners.sharedBy.length === 0
+        text: "You do not share your library with anyone."
+        color: root.theme.dim
+        font.family: root.theme.font
+        font.pixelSize: root.theme.small
+      }
+      Repeater {
+        model: root.partners.sharedBy
+        delegate: PartnerRow {
+          required property var modelData
+          theme: root.theme
+          width: column.width
+          partner: modelData
+          detail: "can see your library"
+          actionText: "Stop sharing..."
+          onAction: root.confirm({
+            title: "Stop sharing your library with " + (modelData.name || modelData.email) + "?",
+            message: "They will no longer see your photos. Nothing is deleted.",
+            confirmText: "Stop sharing",
+            danger: false,
+            onConfirm: function() {
+              root.service.call("partner.remove", { userId: modelData.id }, function(r, e) { if (!root) return;
+                if (e) root.toast(e.message, "error")
+                else root.reload()
+              })
+            }
+          })
+        }
+      }
+      Text {
+        visible: root.partners.sharedWith.length > 0
+        topPadding: root.theme.space(6)
+        text: "Shared with you"
+        color: root.theme.foreground
+        font.family: root.theme.font
+        font.pixelSize: root.theme.body
+      }
+      Repeater {
+        model: root.partners.sharedWith
+        delegate: PartnerRow {
+          required property var modelData
+          theme: root.theme
+          width: column.width
+          partner: modelData
+          detail: modelData.inTimeline ? "their photos are in your timeline" : "their photos are not in your timeline"
+          actionText: modelData.inTimeline ? "Hide from my timeline" : "Show in my timeline"
+          onAction: root.service.call("partner.timeline", { userId: modelData.id, inTimeline: !modelData.inTimeline }, function(r, e) { if (!root) return;
+            if (e) return root.toast(e.message, "error")
+            root.reload()
+            root.service.libraryChanged()
+          })
+        }
       }
     }
   }

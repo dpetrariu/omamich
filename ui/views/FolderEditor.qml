@@ -54,7 +54,7 @@ Rectangle {
       mirrorLocalDeletes: hasAlbum && method !== "download" && mirrorLocal,
       mirrorRemoteDeletes: hasAlbum && method !== "upload" && mirrorRemote
     }
-    service.call("sync.folderSave", { folder: next }, function(r, e) {
+    service.call("sync.folderSave", { folder: next }, function(r, e) { if (!root) return;
       root.busy = false
       if (e) { root.error = e.message; return }
       root.service.applySettingsResponse(r)

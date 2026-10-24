@@ -51,6 +51,7 @@ pub async fn dispatch(app: &App, method: &str, params: &Value) -> Result<Value> 
         "album.removeAssets" => lib::album_assets(app, params, false).await,
         "album.share" => lib::album_share(app, params).await,
         "album.unshare" => lib::album_unshare(app, params).await,
+        "album.setRole" => lib::album_set_role(app, params).await,
 
         "people.list" => lib::people_list(app, params).await,
         "person.get" => lib::person_get(app, params).await,

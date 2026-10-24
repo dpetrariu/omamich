@@ -76,7 +76,11 @@ def main():
         assert state(port)["albums"]["Summer"] == [two]
         shared = backend.call("album.share", {"id": album["id"], "userId": USER, "role": "viewer"})
         assert shared["shared"] and shared["users"][0]["role"] == "viewer", shared
+        promoted = backend.call("album.setRole", {"id": album["id"], "userId": USER, "role": "editor"})
+        assert promoted["users"][0]["role"] == "editor", promoted
+        expect_error(backend, "album.setRole", {"id": album["id"], "userId": USER, "role": "owner"}, "role")
         backend.call("album.unshare", {"id": album["id"], "userId": USER})
+        assert state(port)["albumDetails"][album["id"]]["users"] == {}
         expect_error(backend, "album.create", {"albumName": "   "}, "name")
         listed = backend.call("albums.list", {})
         assert [a["albumName"] for a in listed] == ["Summer"], listed
@@ -117,6 +121,25 @@ def main():
         backend.call("person.merge", {"id": "33333333-3333-4333-8333-333333333333", "ids": [person]})
         assert person not in state(port)["people"]
         print("ok: people")
+
+        # Partners
+        ana = "11111111-1111-4111-8111-222222222222"
+        backend.call("partner.add", {"userId": ana})
+        assert ana in state(port)["partners"]["by"]
+        assert [p["name"] for p in backend.call("partners.list", {})["sharedBy"]] == ["Ana"]
+        backend.call("partner.remove", {"userId": ana})
+        assert state(port)["partners"]["by"] == {}
+        backend.call("partner.timeline", {"userId": ana, "inTimeline": True})
+        assert state(port)["partners"]["with"][ana] is True
+        users = backend.call("users.list", {})
+        assert {u["name"] for u in users} >= {"Test", "Ana"} and all(set(u) <= {"id", "name", "email", "avatarColor"} for u in users)
+        print("ok: partners")
+
+        # Dates
+        backend.call("asset.update", {"ids": [two], "dateTimeOriginal": "2024-05-01T14:30:00.000+02:00"})
+        assert state(port)["assets"][two]["date"].startswith("2024-05-01T14:30"), state(port)["assets"][two]
+        expect_error(backend, "asset.update", {"ids": [two], "dateTimeOriginal": "yesterday"}, "dates")
+        print("ok: dates")
 
         # Download, trash, restore, delete
         saved = backend.call("asset.download", {"ids": [two], "directory": f"{root}/dl"})

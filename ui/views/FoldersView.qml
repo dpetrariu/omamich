@@ -56,7 +56,7 @@ Item {
 
   function reload() {
     loading = true
-    service.call("folders.paths", {}, function(r, e) {
+    service.call("folders.paths", {}, function(r, e) { if (!root) return;
       root.loading = false
       root.error = e ? e.message : ""
       if (!e) root.paths = r
@@ -147,7 +147,7 @@ Item {
     pager: root.hasPhotos ? (function(folder) {
       return function(page, done) {
         if (page > 1) return done([], false, null)
-        root.service.call("folder.assets", { path: folder }, function(r, e) {
+        root.service.call("folder.assets", { path: folder }, function(r, e) { if (!root) return;
           if (e) return done([], false, e)
           done(r, false, null)
         })

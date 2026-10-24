@@ -59,6 +59,12 @@ Sheet {
     } else opened = false
   }
 
+  // Type a filter and take the first match, as typing and Enter would.
+  function choose(text) {
+    field.text = text
+    pick(0)
+  }
+
   function finish(message) {
     busy = false
     if (message) error = message

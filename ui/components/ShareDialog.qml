@@ -42,7 +42,7 @@ Sheet {
     }
     if (albumId) params.albumId = albumId
     else params.assetIds = assetIds
-    service.call("sharedLink.create", params, function(r, e) {
+    service.call("sharedLink.create", params, function(r, e) { if (!root) return;
       root.busy = false
       if (e) {
         root.error = e.message

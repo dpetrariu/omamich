@@ -2,7 +2,7 @@
 CARGO ?= cargo
 BIN := bin/omamich
 
-.PHONY: build install link test test-rust test-sync test-library lint clean
+.PHONY: build install link test test-rust test-sync test-library test-ui lint clean
 
 build:
 	$(CARGO) build --release --locked
@@ -16,7 +16,7 @@ install: build
 link: install
 	./scripts/link-plugin.sh
 
-test: test-rust test-sync test-library lint
+test: test-rust test-sync test-library test-ui lint
 
 test-rust:
 	$(CARGO) test --locked
@@ -35,3 +35,9 @@ clean:
 test-library:
 	$(CARGO) build --locked
 	python3 tests/library_e2e.py target/debug/omamich
+
+# Drives the real window off-screen (QT_QPA_PLATFORM=offscreen) against the
+# seeded mock. Set OMAMICH_UI_SHOTS=/some/dir to keep the screenshots.
+test-ui:
+	$(CARGO) build --locked
+	python3 tests/ui_e2e.py target/debug/omamich

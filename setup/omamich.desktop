@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Omamich
+Comment=Your Immich photo library
+Exec=omarchy-shell shell toggle omamich {}
+Icon=image-multiple
+Terminal=false
+Categories=Graphics;Photography;Viewer;
+Keywords=Immich;Photos;Gallery;Sync;Backup;
+Actions=Sync;
+
+[Desktop Action Sync]
+Name=Folder sync
+Exec=omarchy-shell shell summon omamich {"section":"sync"}

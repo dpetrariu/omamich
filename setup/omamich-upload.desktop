@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Upload to Immich
+Comment=Upload photos and videos with Omamich
+Exec=OMAMICH_DIR/scripts/upload.sh %F
+Icon=image-multiple
+Terminal=false
+NoDisplay=true
+MimeType=image/jpeg;image/png;image/heic;image/heif;image/webp;image/avif;image/gif;image/tiff;image/x-adobe-dng;image/jxl;video/mp4;video/quicktime;video/webm;video/x-matroska;inode/directory;
+Categories=Graphics;Photography;

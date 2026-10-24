@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "omamich",
+  "name": "Omamich",
+  "version": "0.1.0",
+  "author": "omamich contributors",
+  "license": "GPL-3.0-or-later",
+  "description": "Your Immich photo library in a native Omarchy window: a fast timeline, albums, people, places, search and a keyboard-first viewer. It also watches folders and uploads new photos and videos to Immich, Mimick-style, following your Omarchy theme.",
+  "kinds": [
+    "service",
+    "bar-widget",
+    "panel"
+  ],
+  "entryPoints": {
+    "service": "ui/Service.qml",
+    "barWidget": "ui/BarWidget.qml",
+    "panel": "ui/App.qml"
+  },
+  "barWidget": {
+    "displayName": "Omamich",
+    "description": "Your Immich library. The icon shows when folder sync is working or needs attention; click it to open the window.",
+    "category": "Media",
+    "aliases": ["immich", "photos", "pictures", "gallery", "camera", "sync", "backup", "mimick"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "showBarIcon": true,
+      "notifySync": "Errors only"
+    },
+    "schema": [
+      {
+        "key": "showBarIcon",
+        "type": "boolean",
+        "label": "Show the icon in the bar",
+        "defaultValue": true,
+        "description": "Turn this off to keep Omamich out of the bar. Folder sync keeps running; open the window with a keybinding: o.bind(\"SUPER + SHIFT + I\", \"Omamich\", \"omarchy shell shell toggle omamich '{}'\")"
+      },
+      {
+        "key": "notifySync",
+        "type": "enum",
+        "label": "Sync notifications",
+        "options": ["Off", "Errors only", "Every batch"],
+        "defaultValue": "Errors only",
+        "description": "Desktop notifications from folder sync."
+      }
+    ]
+  }
+}

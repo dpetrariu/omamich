@@ -1,0 +1,59 @@
+# Omamich
+
+Your [Immich](https://immich.app) photo library in a native Omarchy window, plus Mimick-style folder sync. Omamich follows the active Omarchy theme, is keyboard-first, and lives in the shell like [Omamail](https://github.com/huacnlee/omamail): a service that keeps running, a bar icon, and a window you summon.
+
+## What it does
+
+- **Timeline** of the whole library, month by month, in justified rows with day headers. Months load as they come near the screen; a scrubber on the right jumps through the years. Libraries of 100,000+ photos scroll the same as small ones.
+- **Viewer** with zoom and pan (full size loads when you zoom in), video playback, live photos, slideshow, rating, and a details panel: date, file, camera and lens, place with a map link, people, albums, tags, description.
+- **People** (rename, birthday, favourite, hide, merge), **Places**, **Explore**, **Albums** (create, rename, describe, sort, cover, share, delete), **Favourites**, **Tags**, **Folders** (the server's import folders), **Archive** and **Trash** (restore, empty).
+- **Search**: smart (CLIP), file name, description and text-in-photo (OCR), with photo/video, favourite and not-in-album filters. Prefixes work in the search field: `file:IMG_2041`, `ocr:receipt`, `desc:holiday`.
+- **Actions** on a photo or a selection: favourite, archive, trash, delete permanently, add to album, tag, shared link, download the original. Undo for archive and trash.
+- **Folder sync** like Mimick: watch folders, upload new photos and videos, skip what Immich already has (SHA-1 check), put each folder into an album, download an album into a folder, or both ways. Optional deletion mirroring in either direction (local deletes go to the Immich trash, album removals go to the desktop trash). Pauses on metered connections, on battery and during quiet hours. Hand-picked uploads: the upload button, dropping files on the window, or "Open with → Upload to Immich" in the file manager.
+- **Bar icon** with a dot while sync works and the urgent colour when it needs attention; desktop notifications for sync failures (or every batch).
+
+## Install
+
+Requirements: Omarchy 4 (the Quickshell shell), Rust, and a C toolchain (`base-devel`). With mise: `mise install rust@latest`.
+
+```bash
+git clone <this repo> ~/Projects/omamich
+cd ~/Projects/omamich
+make link          # builds bin/omamich, links the plugin, enables it
+omarchy restart shell
+```
+
+Click the photos icon in the bar. On first open, give Omamich your server address and an API key (Immich → profile picture → Account Settings → API Keys → New API Key), or press **Use Mimick's** to take over Mimick's server and key. The key is kept in your keyring.
+
+Open the window from the keyboard by adding to `~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + SHIFT + I", "Omamich", "omarchy shell shell toggle omamich '{}'")
+```
+
+### API key permissions
+
+`all` makes every feature work. For a read-only viewer, `user.read`, `asset.read`, `asset.view`, `asset.download`, `album.read`, `person.read`, `tag.read`, `userPreference.read`, `server.about` and `asset.statistics` are enough. Folder sync additionally needs `asset.upload`, `asset.update`, `album.create` and `albumAsset.create`. An action the key may not do says so instead of failing silently.
+
+## Keys
+
+Press `?` in the window for the full sheet. The essentials: `h j k l` move, `enter` view, `esc` back, `space` select, `f` favourite, `a` archive, `d` trash, `Shift+A` add to album, `t` tag, `s` share, `Shift+D` download, `i` details, `/` search, `Alt+1…0` sidebar sections, `Ctrl+,` settings, `Ctrl+Y` folder sync.
+
+Scripts and keybindings can move around (never change anything) over IPC: `omarchy-shell shell call omamich navigate next`, `… navigate go:people`, `… navigate search:sunset`.
+
+## Development
+
+```bash
+make test        # Rust unit tests, sync and library end-to-end tests against a mock Immich, UI logic tests
+make install     # rebuild bin/omamich
+omarchy restart shell   # the shell caches QML; restart it after UI edits
+qs log -i "$(ls -t /run/user/$UID/quickshell/by-id/ | head -1)" -f | grep omamich
+```
+
+`OMAMICH_HOME=/tmp/x omamich serve` runs a backend with its own config, data and cache, and never touches the keyring. The end-to-end tests use this with `tests/mock_immich.py`, so they never touch a real library.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit.
+
+## Credits and licence
+
+Omamich's features follow [Mimick](https://github.com/nicx17/mimick) (GPL-3.0), and its structure and interface principles follow [Omamail](https://github.com/huacnlee/omamail) (MIT). Omamich is licensed under the GNU General Public License v3.0 or later. Not affiliated with Immich.

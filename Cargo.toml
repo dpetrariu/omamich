@@ -1,0 +1,36 @@
+[package]
+name = "omamich"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "Immich photo library and folder sync for the Omarchy shell"
+publish = false
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "net", "io-util", "io-std", "fs", "process", "signal"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = "0.3"
+bytes = "1"
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "charset", "http2", "json", "multipart", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+oo7 = { version = "0.6", default-features = false, features = ["tokio", "native_crypto"] }
+notify = "8"
+rusqlite = { version = "0.38", features = ["bundled"] }
+sha1 = "0.11"
+hex = "0.4"
+getrandom = "0.3"
+percent-encoding = "2"
+url = "2"
+walkdir = "2"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = true

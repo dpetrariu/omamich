@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "omamich",
   "name": "Omamich",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "omamich contributors",
   "license": "GPL-3.0-or-later",
   "description": "Your Immich photo library in a native Omarchy window: a fast timeline, albums, people, places, search and a keyboard-first viewer. It also watches folders and uploads new photos and videos to Immich, Mimick-style, following your Omarchy theme.",

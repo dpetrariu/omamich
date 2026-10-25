@@ -7,7 +7,7 @@ Item {
   id: root
   required property var service
   property string albumId: ""
-  signal queued(int count)
+  signal chosen(var paths)
 
   function open() { picker.open() }
 

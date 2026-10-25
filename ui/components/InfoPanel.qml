@@ -25,6 +25,8 @@ Item {
 
   readonly property var exif: details && details.exif ? details.exif : ({})
   readonly property bool typing: description.activeFocus
+  readonly property bool localOnly: !!asset && !!asset.localPath && !asset.assetId
+  readonly property bool ratingsOn: !(service.overview && service.overview.preferences && service.overview.preferences.ratings === false)
 
   // The description being written belongs to the photo it was started on,
   // even if the viewer moves on before it is saved.
@@ -63,6 +65,7 @@ Item {
     albums = []
     if (!asset || width === 0) return
     var id = asset.id
+    if (String(id).indexOf("local:") === 0) return
     service.call("asset.albums", { id: id }, function(r, e) { if (!root) return;
       if (root.asset && root.asset.id === id && !e) root.albums = r
     })
@@ -125,8 +128,36 @@ Item {
       width: parent.width - root.theme.space(36)
       spacing: root.theme.space(16)
 
+      // A file on this computer: where it is and where it stands with Immich.
+      Column {
+        visible: !!root.asset && !!root.asset.localPath
+        width: parent.width
+        spacing: root.theme.space(10)
+        InfoRow {
+          theme: root.theme
+          icon: "computer"
+          title: root.asset && root.asset.localPath ? root.asset.originalFileName : ""
+          detail: root.asset && root.asset.localPath ? root.asset.localPath + (root.asset.size ? "\n" + Format.bytes(root.asset.size) : "") : ""
+          selectable: true
+        }
+        InfoRow {
+          theme: root.theme
+          icon: !root.asset ? "" : root.asset.syncState === "done" ? "cloudCheck" : root.asset.syncState === "failed" ? "warning" : root.asset.syncState === "pending" ? "sync" : "cloudOff"
+          title: {
+            switch (root.asset ? root.asset.syncState : "") {
+            case "done": return "In Immich"
+            case "pending": return "Waiting to upload"
+            case "failed": return "Could not upload"
+            case "skipped": return "Skipped by the folder's rules"
+            default: return "Only on this computer"
+            }
+          }
+          detail: root.asset && root.asset.syncError ? root.asset.syncError : ""
+        }
+      }
+
       Text {
-        visible: !root.details
+        visible: !root.details && !root.localOnly
         text: "Loading…"
         color: root.theme.dim
         font.family: root.theme.font
@@ -166,7 +197,7 @@ Item {
 
       // Rating
       Row {
-        visible: !!root.details
+        visible: !!root.details && root.ratingsOn
         spacing: root.theme.space(2)
         Repeater {
           model: 5

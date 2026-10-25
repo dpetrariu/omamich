@@ -203,7 +203,7 @@ pub async fn trash_empty(app: &App) -> Result<Value> {
     Ok(app.immich.post("/api/trash/empty", json!({})).await?)
 }
 
-fn downloads_dir() -> std::path::PathBuf {
+pub fn downloads_dir() -> std::path::PathBuf {
     let home = crate::paths::home();
     let config = home.join(".config/user-dirs.dirs");
     if let Ok(text) = std::fs::read_to_string(config) {
@@ -714,16 +714,23 @@ fn tag_color(params: &Value) -> Result<Option<String>> {
     }
 }
 
+/// Create a tag. A name like `Trips/2024` is a nested tag; Immich creates
+/// any missing parents. Answers with the deepest tag.
 pub async fn tag_create(app: &App, params: &Value) -> Result<Value> {
-    let name = str_param(params, "name").trim().to_string();
-    if name.is_empty() || name.len() > 200 {
-        return Err(Error::invalid("Tag names are 1 to 200 characters"));
+    let name = str_param(params, "name").trim().trim_matches('/').to_string();
+    if name.is_empty() || name.len() > 200 || name.contains("//") {
+        return Err(Error::invalid("Tag names are 1 to 200 characters; use / between levels"));
     }
-    let mut body = json!({ "name": name });
+    let created = app.immich.put("/api/tags", json!({ "tags": [name] })).await?;
+    let mut tag = created
+        .as_array()
+        .and_then(|list| list.iter().find(|t| t.get("value").and_then(|v| v.as_str()) == Some(name.as_str())).or(list.last()).cloned())
+        .ok_or_else(|| Error::new(crate::error::SERVER, "Immich did not return the new tag"))?;
     if let Some(color) = tag_color(params)? {
-        body["color"] = json!(color);
+        if let Some(id) = tag.get("id").and_then(|v| v.as_str()) {
+            tag = app.immich.put(&format!("/api/tags/{}", require_id(id)?), json!({ "color": color })).await?;
+        }
     }
-    let tag = app.immich.post("/api/tags", body).await?;
     Ok(pick(&tag, &["id", "name", "value", "color", "parentId"]))
 }
 
@@ -753,6 +760,36 @@ pub async fn tag_assets(app: &App, params: &Value, add: bool) -> Result<Value> {
         app.immich.delete(&path, Some(json!({ "ids": ids }))).await?;
     }
     Ok(json!(ids.len()))
+}
+
+/// One photo and the photo count per tag, to draw tags as tiles and rows.
+/// Eight questions at a time, so a long tag list does not flood the server.
+pub async fn tag_covers(app: &App, params: &Value) -> Result<Value> {
+    use futures_util::StreamExt;
+    let list = params.get("ids").and_then(|v| v.as_array()).ok_or_else(|| Error::invalid("Expected a list of ids"))?;
+    let ids: Vec<String> = list
+        .iter()
+        .filter_map(|v| v.as_str().filter(|s| valid_id(s)).map(|s| s.to_string()))
+        .take(500)
+        .collect();
+    let found: Vec<Option<(String, Value, Value)>> = futures_util::stream::iter(ids.into_iter().map(|id| async move {
+        let result = app
+            .immich
+            .post("/api/search/metadata", json!({ "tagIds": [id], "size": 1, "page": 1, "withExif": false }))
+            .await
+            .ok()?;
+        let asset = result.pointer("/assets/items/0/id").cloned().unwrap_or(Value::Null);
+        let total = result.pointer("/assets/total").cloned().unwrap_or(Value::Null);
+        Some((id, asset, total))
+    }))
+    .buffer_unordered(8)
+    .collect()
+    .await;
+    let mut out = Map::new();
+    for (id, asset, total) in found.into_iter().flatten() {
+        out.insert(id, json!({ "assetId": asset, "count": total }));
+    }
+    Ok(Value::Object(out))
 }
 
 // ---------------------------------------------------------------- folders
@@ -925,13 +962,31 @@ pub async fn statistics(app: &App) -> Result<Value> {
 }
 
 pub async fn server_overview(app: &App) -> Result<Value> {
-    let (me, version, features, about, storage) = tokio::join!(
+    let (me, version, features, about, storage, preferences) = tokio::join!(
         app.immich.get("/api/users/me"),
         app.immich.get("/api/server/version"),
         app.immich.get("/api/server/features"),
         app.immich.get("/api/server/about"),
         app.immich.get("/api/server/storage"),
+        app.immich.get("/api/users/me/preferences"),
     );
+    // Which pages the person turned off in their Immich account.
+    let enabled = |key: &str| -> Value {
+        preferences
+            .as_ref()
+            .ok()
+            .and_then(|p| p.get(key))
+            .and_then(|v| v.get("enabled"))
+            .cloned()
+            .unwrap_or(Value::Bool(true))
+    };
+    let preferences = json!({
+        "folders": enabled("folders"),
+        "tags": enabled("tags"),
+        "people": enabled("people"),
+        "sharedLinks": enabled("sharedLinks"),
+        "ratings": enabled("ratings"),
+    });
     let me = me?;
     let route = app.immich.route().await;
     Ok(json!({
@@ -940,6 +995,7 @@ pub async fn server_overview(app: &App) -> Result<Value> {
         "features": features.unwrap_or(Value::Null),
         "about": about.map(|a| pick(&a, &["version", "build", "repository", "licensed"])).unwrap_or(Value::Null),
         "storage": storage.map(|s| pick(&s, &["diskSize", "diskUse", "diskAvailable", "diskUsagePercentage"])).unwrap_or(Value::Null),
+        "preferences": preferences,
         "route": route,
     }))
 }

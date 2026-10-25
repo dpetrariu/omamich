@@ -68,6 +68,8 @@ var BINDINGS = [
     hintKey: "/", hint: { grid: "search", tiles: "search" } },
   { id: "section", keys: ["Alt+1", "Alt+2", "Alt+3", "Alt+4", "Alt+5", "Alt+6", "Alt+7", "Alt+8", "Alt+9", "Alt+0"],
     contexts: ["grid", "tiles", "viewer", "page"], group: "Going places", label: "Go to a sidebar section" },
+  { id: "historyBack", keys: ["Alt+Left"], contexts: ["grid", "tiles", "viewer", "page"], group: "Going places", label: "Back to the previous page" },
+  { id: "historyForward", keys: ["Alt+Right"], contexts: ["grid", "tiles", "viewer", "page"], group: "Going places", label: "Forward again" },
   { id: "sync", keys: ["Ctrl+Y"], contexts: ANY, group: "Going places", label: "Folder sync" },
   { id: "settings", keys: ["Ctrl+,"], contexts: ANY, group: "Going places", label: "Settings" },
   { id: "sidebar", keys: ["Ctrl+B"], contexts: ["grid", "tiles", "page"], group: "Going places", label: "Show or hide the sidebar" },

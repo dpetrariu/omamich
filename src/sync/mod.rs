@@ -313,6 +313,39 @@ impl Engine {
         count
     }
 
+    pub fn index(&self) -> &Index {
+        &self.index
+    }
+
+    /// Try one failed file again.
+    pub fn retry_file(&self, path: &str) -> bool {
+        let Ok(Some(record)) = self.index.get(path) else { return false };
+        let mut reset = record.clone();
+        reset.state = "pending".into();
+        reset.error.clear();
+        reset.attempts = 0;
+        let _ = self.index.put(&reset);
+        let folder_id = (!record.folder_id.is_empty()).then(|| record.folder_id.clone());
+        self.push(Job::Upload { path: PathBuf::from(path), folder_id, album_id: None, checksum: None, attempt: 0 })
+    }
+
+    /// Stop showing failures: the files are skipped until they change.
+    pub fn dismiss_failed(&self, paths: Option<Vec<String>>) -> usize {
+        let failed = self.index.failed().unwrap_or_default();
+        let mut count = 0;
+        for record in failed {
+            if paths.as_ref().map(|p| p.contains(&record.path)).unwrap_or(true) {
+                let mut skipped = record.clone();
+                skipped.state = "skipped".into();
+                skipped.error = format!("Dismissed: {}", record.error);
+                let _ = self.index.put(&skipped);
+                count += 1;
+            }
+        }
+        self.touch();
+        count
+    }
+
     pub fn set_paused(&self, paused: bool) {
         self.state.lock().unwrap().manual_pause = paused;
         self.touch();
@@ -520,9 +553,10 @@ impl Engine {
                     }
                 }
             }
-            let mut existing_for_album = Vec::new();
+            let mut existing_for_album: Vec<(String, PathBuf)> = Vec::new();
             for (i, (path, size, mtime, sum)) in hashed.into_iter().enumerate() {
                 let path_text = path.to_string_lossy().into_owned();
+                let path_text_for_album = path_text.clone();
                 match verdicts.get(&i.to_string()) {
                     Some(Check::Exists(asset)) => {
                         let _ = self.index.put(&FileRecord {
@@ -536,7 +570,7 @@ impl Engine {
                             error: String::new(),
                             attempts: 0,
                         });
-                        existing_for_album.push(asset.clone());
+                        existing_for_album.push((asset.clone(), PathBuf::from(&path_text_for_album)));
                         self.state.lock().unwrap().duplicates += 1;
                     }
                     _ => {
@@ -561,15 +595,41 @@ impl Engine {
                     }
                 }
             }
-            // Photos Immich already had still belong in this folder's album.
-            if !existing_for_album.is_empty() && !folder.album_name.is_empty() {
-                if let Ok(album) = self.album_for(folder).await {
-                    let _ = remote::add_to_album(&self.immich, &album, &existing_for_album).await;
+            // Photos Immich already had still belong in this folder's album(s).
+            let mut by_album: HashMap<String, Vec<String>> = HashMap::new();
+            for (asset, path) in existing_for_album {
+                if let Ok(Some(album)) = self.album_for_path(folder, &path).await {
+                    by_album.entry(album).or_default().push(asset);
                 }
+            }
+            for (album, assets) in by_album {
+                let _ = remote::add_to_album(&self.immich, &album, &assets).await;
             }
             self.touch();
         }
         Ok(())
+    }
+
+    /// The album a file in this folder belongs in, if the folder uses albums.
+    async fn album_for_path(&self, folder: &WatchFolder, path: &Path) -> Result<Option<String>> {
+        if !folder.album_per_subfolder {
+            if folder.album_name.is_empty() {
+                return Ok(None);
+            }
+            return self.album_for(folder).await.map(Some);
+        }
+        let name = album_name_for(folder, path);
+        let key = format!("{}:{}", folder.id, name);
+        if let Some(id) = self.albums.lock().unwrap().get(&key).cloned() {
+            return Ok(Some(id));
+        }
+        let _guard = self.album_lock.lock().await;
+        if let Some(id) = self.albums.lock().unwrap().get(&key).cloned() {
+            return Ok(Some(id));
+        }
+        let id = remote::ensure_album(&self.immich, &name).await?;
+        self.albums.lock().unwrap().insert(key, id.clone());
+        Ok(Some(id))
     }
 
     async fn album_for(&self, folder: &WatchFolder) -> Result<String> {
@@ -726,7 +786,7 @@ impl Engine {
             };
             let target_album = match (&folder, &album_id) {
                 (_, Some(id)) => Some(id.clone()),
-                (Some(f), None) if !f.album_name.is_empty() => Some(self.album_for(f).await?),
+                (Some(f), None) => self.album_for_path(f, &path).await?,
                 _ => None,
             };
             if let Some(album) = target_album {
@@ -1254,6 +1314,19 @@ impl Engine {
     }
 }
 
+/// The album name for a file when each subfolder is its own album.
+pub fn album_name_for(folder: &WatchFolder, path: &Path) -> String {
+    let root = Path::new(&folder.path);
+    let parent = path.parent().unwrap_or(root);
+    if parent == root {
+        if !folder.album_name.is_empty() {
+            return folder.album_name.clone();
+        }
+        return root.file_name().and_then(|n| n.to_str()).unwrap_or("Photos").to_string();
+    }
+    parent.file_name().and_then(|n| n.to_str()).unwrap_or("Photos").to_string()
+}
+
 fn folder_readable(path: &Path) -> bool {
     std::fs::read_dir(path).is_ok()
 }
@@ -1273,6 +1346,16 @@ fn mass_deletion(count: usize, total: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subfolder_album_names() {
+        let folder = WatchFolder { path: "/p/Trips".into(), album_per_subfolder: true, ..Default::default() };
+        assert_eq!(album_name_for(&folder, Path::new("/p/Trips/Rome/a.jpg")), "Rome");
+        assert_eq!(album_name_for(&folder, Path::new("/p/Trips/Rome/day2/a.jpg")), "day2");
+        assert_eq!(album_name_for(&folder, Path::new("/p/Trips/a.jpg")), "Trips");
+        let named = WatchFolder { album_name: "Loose".into(), ..folder };
+        assert_eq!(album_name_for(&named, Path::new("/p/Trips/a.jpg")), "Loose");
+    }
 
     #[test]
     fn mass_deletion_guard() {

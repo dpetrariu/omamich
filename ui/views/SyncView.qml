@@ -178,6 +178,17 @@ Item {
               onClicked: { root.showFailed = !root.showFailed; if (root.showFailed) root.loadFailed() }
             }
             TextButton {
+              theme: root.theme
+              text: "Export diagnostics..."
+              fontSize: root.theme.small
+              onClicked: root.service.call("diagnostics.export", {}, function(r, e) {
+                if (!root) return
+                if (e) return root.toast(e.message, "error")
+                root.toast("Saved diagnostics to " + r.directory + ". Nothing private is in them; read them before sharing.", "info")
+                Qt.openUrlExternally("file://" + r.directory)
+              })
+            }
+            TextButton {
               visible: root.status.queue > 0
               theme: root.theme
               text: "Clear queue"
@@ -187,16 +198,61 @@ Item {
           }
           Repeater {
             model: root.showFailed ? root.failedFiles : []
-            delegate: Text {
+            delegate: Item {
+              id: failure
               required property var modelData
               width: now.width
-              wrapMode: Text.Wrap
-              text: modelData.name + " — " + modelData.error
-              textFormat: Text.PlainText
-              color: root.theme.urgent
-              font.family: root.theme.font
-              font.pixelSize: root.theme.caption
+              height: Math.max(failureText.implicitHeight, root.theme.space(28))
+              Column {
+                id: failureText
+                anchors.left: parent.left
+                anchors.right: failureButtons.left
+                anchors.rightMargin: root.theme.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                Text {
+                  width: parent.width
+                  text: failure.modelData.name
+                  textFormat: Text.PlainText
+                  elide: Text.ElideMiddle
+                  color: root.theme.foreground
+                  font.family: root.theme.font
+                  font.pixelSize: root.theme.small
+                }
+                Text {
+                  width: parent.width
+                  wrapMode: Text.Wrap
+                  text: failure.modelData.error + (failure.modelData.attempts > 1 ? "  (" + failure.modelData.attempts + " tries)" : "")
+                  textFormat: Text.PlainText
+                  color: root.theme.urgent
+                  font.family: root.theme.font
+                  font.pixelSize: root.theme.caption
+                }
+              }
+              Row {
+                id: failureButtons
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                TextButton {
+                  theme: root.theme
+                  text: "Retry"
+                  fontSize: root.theme.caption
+                  onClicked: root.service.call("sync.retryFile", { path: failure.modelData.path }, function() { if (!root) return; root.loadFailed() })
+                }
+                TextButton {
+                  theme: root.theme
+                  text: "Dismiss"
+                  fontSize: root.theme.caption
+                  onClicked: root.service.call("sync.dismissFailed", { paths: [failure.modelData.path] }, function() { if (!root) return; root.loadFailed(); root.service.refreshSync() })
+                }
+              }
             }
+          }
+          TextButton {
+            visible: root.showFailed && root.failedFiles.length > 1
+            theme: root.theme
+            text: "Dismiss all failures"
+            fontSize: root.theme.small
+            onClicked: root.service.call("sync.dismissFailed", {}, function() { if (!root) return; root.loadFailed(); root.service.refreshSync() })
           }
         }
       }
@@ -264,7 +320,8 @@ Item {
               textFormat: Text.PlainText
               text: {
                 var parts = []
-                parts.push(modelData.albumName ? (modelData.method === "download" ? "from" : modelData.method === "full" ? "with" : "into") + " “" + modelData.albumName + "”" : "into the library")
+                parts.push(modelData.albumPerSubfolder ? "one album per subfolder"
+                  : modelData.albumName ? (modelData.method === "download" ? "from" : modelData.method === "full" ? "with" : "into") + " “" + modelData.albumName + "”" : "into the library")
                 var c = folderRow.folderState ? folderRow.folderState.counts : null
                 if (folderRow.folderState && !folderRow.folderState.exists) parts.push("folder missing")
                 else if (c) parts.push(Format.count(c.done, "file") + " synced" + (c.failed ? ", " + c.failed + " failed" : "") + (c.pending ? ", " + c.pending + " waiting" : ""))

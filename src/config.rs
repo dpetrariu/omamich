@@ -111,6 +111,9 @@ pub struct WatchFolder {
     pub mirror_local_deletes: bool,
     /// Removing a photo from the album moves the local file to the desktop trash.
     pub mirror_remote_deletes: bool,
+    /// Each subfolder becomes its own album, named after it; files directly
+    /// in the folder go to `album_name`, or an album named after the folder.
+    pub album_per_subfolder: bool,
 }
 
 impl Default for WatchFolder {
@@ -127,6 +130,7 @@ impl Default for WatchFolder {
             extensions: Vec::new(),
             mirror_local_deletes: false,
             mirror_remote_deletes: false,
+            album_per_subfolder: false,
         }
     }
 }
@@ -146,7 +150,13 @@ impl WatchFolder {
             .map(|e| e.trim().trim_start_matches('.').to_ascii_lowercase())
             .filter(|e| !e.is_empty())
             .collect();
-        if self.album_name.is_empty() {
+        if self.album_per_subfolder {
+            // Albums follow the subfolders, so there is no one album to
+            // download from or mirror removals of.
+            self.album_id.clear();
+            self.method = SyncMethod::Upload;
+            self.mirror_remote_deletes = false;
+        } else if self.album_name.is_empty() {
             self.album_id.clear();
             self.method = SyncMethod::Upload;
             self.mirror_remote_deletes = false;
@@ -365,6 +375,22 @@ mod tests {
         assert_eq!(folder.method, SyncMethod::Upload);
         assert!(!folder.mirror_local_deletes && !folder.mirror_remote_deletes);
         assert_eq!(folder.extensions, vec!["jpg".to_string()]);
+    }
+
+    #[test]
+    fn album_per_subfolder_only_uploads() {
+        let folder = WatchFolder {
+            path: "/p".into(),
+            album_per_subfolder: true,
+            method: SyncMethod::Full,
+            mirror_local_deletes: true,
+            mirror_remote_deletes: true,
+            ..Default::default()
+        }
+        .normalized();
+        assert_eq!(folder.method, SyncMethod::Upload);
+        assert!(folder.mirror_local_deletes);
+        assert!(!folder.mirror_remote_deletes);
     }
 
     #[test]

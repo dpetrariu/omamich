@@ -39,6 +39,7 @@ var GLYPHS = {
   more: 0xF01D9,          // dots-vertical
   close: 0xF0156,         // close
   back: 0xF004D,          // arrow-left
+  forward: 0xF0054,       // arrow-right
   chevronLeft: 0xF0141,   // chevron-left
   chevronRight: 0xF0142,  // chevron-right
   chevronDown: 0xF0140,   // chevron-down
@@ -81,7 +82,18 @@ var GLYPHS = {
   slideshow: 0xF13E6,     // play-box-multiple-outline
   grid: 0xF11D9,          // view-grid-outline
   text: 0xF09ED,          // text-box-outline
-  help: 0xF0625           // help-circle-outline
+  help: 0xF0625,          // help-circle-outline
+  sort: 0xF04BF,          // sort-variant
+  filter: 0xF0233,        // filter-outline
+  personSearch: 0xF0935,  // account-search-outline
+  computer: 0xF0322,      // laptop
+  dates: 0xF0B68,         // calendar-range-outline
+  lens: 0xF0104,          // camera-iris
+  fileUpload: 0xF0A4E,    // file-upload-outline
+  chevronUp: 0xF0143,     // chevron-up
+  moreHorizontal: 0xF01D8, // dots-horizontal
+  noImage: 0xF11D1,       // image-off-outline
+  minus: 0xF0374          // minus
 }
 
 function glyph(name) {

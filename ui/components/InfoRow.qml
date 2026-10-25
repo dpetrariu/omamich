@@ -31,7 +31,8 @@ Item {
     id: texts
     anchors.left: glyph.right
     anchors.leftMargin: root.theme.space(8)
-    anchors.right: linkText.left
+    anchors.right: root.link !== "" ? linkText.left : parent.right
+    anchors.rightMargin: root.link !== "" ? root.theme.space(8) : 0
     spacing: root.theme.space(2)
     TextEdit {
       width: parent.width
@@ -70,7 +71,7 @@ Item {
     id: linkText
     anchors.right: parent.right
     y: root.theme.space(2)
-    width: root.link ? implicitWidth : 0
+    visible: root.link !== ""
     text: root.link
     color: linkMouse.containsMouse ? root.theme.foreground : root.theme.accent
     font.family: root.theme.font

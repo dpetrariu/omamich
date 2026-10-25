@@ -83,6 +83,13 @@ pub async fn dispatch(app: &App, method: &str, params: &Value) -> Result<Value> 
         "partner.remove" => lib::partner_remove(app, params).await,
         "partner.timeline" => lib::partner_timeline(app, params).await,
 
+        "local.list" => crate::local::list(params).await,
+        "local.check" => crate::local::check(app, params).await,
+        "local.folderFiles" => crate::local::folder_files(app, params).await,
+        "export.prepare" => crate::local::export_prepare(app, params).await,
+        "diagnostics.export" => crate::local::diagnostics(app, params).await,
+        "tags.covers" => lib::tag_covers(app, params).await,
+
         "cache.info" => cache_info(app).await,
         "cache.clear" => cache_clear(app).await,
 
@@ -97,6 +104,13 @@ pub async fn dispatch(app: &App, method: &str, params: &Value) -> Result<Value> 
             Ok(app.sync.status())
         }
         "sync.retryFailed" => Ok(json!(app.sync.retry_failed())),
+        "sync.retryFile" => Ok(json!(app.sync.retry_file(str_param(params, "path")))),
+        "sync.dismissFailed" => {
+            let paths = params.get("paths").and_then(|v| v.as_array()).map(|list| {
+                list.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+            });
+            Ok(json!(app.sync.dismiss_failed(paths)))
+        }
         "sync.clearQueue" => {
             app.sync.clear_queue();
             Ok(app.sync.status())

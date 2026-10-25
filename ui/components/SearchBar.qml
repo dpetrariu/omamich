@@ -9,7 +9,7 @@ Item {
   required property var theme
   property alias text: field.text
   readonly property bool focused: field.activeFocus
-  property string placeholder: "Search your photos — beach at sunset, file:IMG_2041, ocr:receipt"
+  property string placeholder: "Search your photos — beach at sunset, file:IMG_2041, ocr:receipt; Enter alone to filter"
 
   signal submitted(string text)
   signal cancelled()

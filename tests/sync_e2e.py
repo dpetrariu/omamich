@@ -205,6 +205,35 @@ def main():
         assert state(port)["assets"][trashed_id]["trashed"]
         photo(f"{a}/d-again.jpg", "d")
         wait_for("the trashed copy is restored", lambda: not state(port)["assets"][trashed_id]["trashed"])
+        # One album per subfolder.
+        per = os.path.join(root, "P")
+        photo(f"{per}/Rome/r1.jpg", "rome1")
+        photo(f"{per}/Rome/r2.jpg", "rome2")
+        photo(f"{per}/Paris/p1.jpg", "paris1")
+        photo(f"{per}/loose.jpg", "loose1")
+        backend.call("sync.folderSave", {"folder": {"path": per, "albumPerSubfolder": True, "method": "full"}})
+        saved = next(f for f in backend.call("settings.get")["settings"]["sync"]["folders"] if f["path"] == per)
+        assert saved["method"] == "upload", "per-subfolder albums only upload"
+        wait_for("subfolders become albums", lambda: all(len(state(port)["albums"].get(n, [])) == c for n, c in (("Rome", 2), ("Paris", 1), ("P", 1))))
+        print("ok: one album per subfolder")
+
+        # A file Immich refuses: listed, retried, dismissed.
+        photo(f"{a}/broken.jpg", "broken")
+        wait_for("the refused file is listed", lambda: any(f["name"] == "broken.jpg" for f in backend.call("sync.failed")))
+        assert backend.call("sync.retryFile", {"path": f"{a}/broken.jpg"}) is True
+        wait_for("it fails again", lambda: any(f["name"] == "broken.jpg" for f in backend.call("sync.failed")))
+        assert backend.call("sync.dismissFailed", {"paths": [f"{a}/broken.jpg"]}) == 1
+        assert backend.call("sync.failed") == []
+        assert backend.call("sync.status")["failed"] == 0
+        print("ok: retry and dismiss a failed file")
+
+        # The folder as the library's "On this computer" view sees it.
+        folder_a = next(f for f in backend.call("settings.get")["settings"]["sync"]["folders"] if f["path"] == a)
+        files = {f["name"]: f for f in backend.call("local.folderFiles", {"folderId": folder_a["id"]})["items"]}
+        assert files["e.jpg"]["syncState"] == "done" and files["e.jpg"]["assetId"], files["e.jpg"]
+        assert files["broken.jpg"]["syncState"] == "skipped", files["broken.jpg"]
+        assert ".hidden" not in "".join(files)
+        print("ok: local folder files with their sync state")
         print("all sync checks passed")
     finally:
         if backend:

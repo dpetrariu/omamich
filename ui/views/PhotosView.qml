@@ -16,6 +16,10 @@ Item {
   property var scope: ({})
   property var pager: null
   property var actions: []
+  property bool sortable: true
+  property string order: "desc"
+  property string sortMode: ""
+  readonly property var sortLabels: ({ "": "Newest first", newest: "Newest first", oldest: "Oldest first", name: "By name", type: "Photos, then videos" })
   property string emptyIcon: "photos"
   property string emptyTitle: "No photos here"
   property string emptyText: ""
@@ -39,9 +43,29 @@ Item {
     subtitle: root.subtitle !== "" ? root.subtitle
       : (timeline.total > 0 ? Format.count(timeline.total, "item") : "")
     showBack: root.showBack
-    actions: root.actions
+    actions: root.actions.concat(!root.sortable ? [] : [{
+      id: "_sort", icon: "sort",
+      label: root.pager ? root.sortLabels[root.sortMode] : (root.order === "asc" ? "Oldest first" : "Newest first")
+    }])
     onBack: root.back()
-    onActionTriggered: function(id) { root.actionTriggered(id) }
+    onActionTriggered: function(id, button) {
+      if (id !== "_sort") root.actionTriggered(id)
+      else if (root.pager) sortMenu.openBelow(button)
+      else root.order = root.order === "asc" ? "desc" : "asc"
+    }
+  }
+
+  PopupMenu {
+    id: sortMenu
+    theme: root.theme
+    parent: root
+    items: [
+      { id: "newest", label: "Newest first" },
+      { id: "oldest", label: "Oldest first" },
+      { id: "name", label: "By name" },
+      { id: "type", label: "Photos, then videos" }
+    ]
+    onActivated: function(id) { root.sortMode = id }
   }
 
   Timeline {
@@ -49,8 +73,9 @@ Item {
     theme: root.theme
     service: root.service
     anchors { left: parent.left; right: parent.right; top: header.bottom; bottom: parent.bottom }
-    scope: root.scope
+    scope: root.order === "asc" ? Object.assign({}, root.scope, { order: "asc" }) : root.scope
     pager: root.pager
+    sortMode: root.sortMode
     zoom: root.zoom
     emptyIcon: root.emptyIcon
     emptyTitle: root.emptyTitle

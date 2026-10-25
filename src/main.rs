@@ -3,6 +3,7 @@ mod config;
 mod error;
 mod immich;
 mod library;
+mod local;
 mod media;
 mod methods;
 mod paths;

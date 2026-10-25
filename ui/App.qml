@@ -38,16 +38,11 @@ Item {
     opened = true
     if (service) service.windowOpen = true
     if (payload.section) go(String(payload.section))
-    // From the file manager: "Upload to Immich" hands files over here.
+    // From the file manager: "Upload to Immich" opens the staging page.
     if (payload.upload && service) {
       var paths = []
       for (var i = 0; i < payload.upload.length && i < 5000; i++) paths.push(String(payload.upload[i]))
-      service.call("sync.uploadFiles", { paths: paths }, function(r, e) {
-        if (e) return root.failed(e)
-        toast.show("Uploading " + Format.count(r.queued, "file") + "…", {
-          actionText: "Show progress", action: function() { root.go("sync") }
-        })
-      })
+      stage(paths, "")
     }
     Qt.callLater(focusContent)
   }
@@ -64,7 +59,7 @@ Item {
   // library is refused here; those stay behind a person's keypress.
   readonly property var navigationIds: ["left", "right", "up", "down", "pageDown", "pageUp", "first", "last",
     "open", "previous", "next", "back", "info", "help", "sidebar", "search", "refresh", "zoomIn", "zoomOut",
-    "zoomReset", "fullscreen", "settings", "sync", "select", "selectAll"]
+    "zoomReset", "fullscreen", "settings", "sync", "select", "selectAll", "historyBack", "historyForward"]
   function navigate(id) {
     var name = String(id || "")
     if (name.indexOf("go:") === 0) {
@@ -92,7 +87,8 @@ Item {
 
   // Handles for the off-screen UI tests, which drive dialogs directly.
   readonly property var testHooks: ({ prompt: promptDialog, confirm: confirmDialog, picker: pickerDialog,
-    share: shareDialog, albumPeople: albumPeople, viewer: viewer, info: infoPanel, toast: toast })
+    share: shareDialog, albumPeople: albumPeople, viewer: viewer, info: infoPanel, toast: toast,
+    content: contentLoader, window: window })
 
   function requestClose() {
     if (shell && typeof shell.hide === "function") shell.hide(pluginId)
@@ -103,7 +99,23 @@ Item {
 
   // ---------------------------------------------------------------- navigation
 
-  readonly property var sections: [
+  // Pages the person turned off in Immich, or features the server lacks,
+  // are left out rather than shown failing.
+  readonly property var preferences: service && service.overview && service.overview.preferences ? service.overview.preferences : ({})
+  function sectionAvailable(id) {
+    var f = features()
+    switch (id) {
+    case "people": return f.facialRecognition !== false && preferences.people !== false
+    case "places": return f.reverseGeocoding !== false || f.map !== false
+    case "tags": return preferences.tags !== false
+    case "folders": return preferences.folders !== false
+    case "trash": return f.trash !== false
+    case "computer": return !!service && !!service.settings && !!service.settings.sync && (service.settings.sync.folders || []).length > 0
+    }
+    return true
+  }
+  readonly property var sections: allSections.filter(function(s) { return root.sectionAvailable(s.id) })
+  readonly property var allSections: [
     { id: "photos", label: "Photos", icon: "photos", group: "library", count: service && service.statistics ? Format.thousands(service.statistics.total) : "" },
     { id: "explore", label: "Explore", icon: "explore", group: "library" },
     { id: "people", label: "People", icon: "people", group: "library", count: service && service.peopleLoaded ? Format.thousands(service.peopleTotal) : "" },
@@ -115,6 +127,7 @@ Item {
     { id: "folders", label: "Folders", icon: "folders", group: "collections" },
     { id: "archive", label: "Archive", icon: "archive", group: "utility", count: service && service.statistics && service.statistics.archived ? Format.thousands(service.statistics.archived) : "" },
     { id: "trash", label: "Trash", icon: "trash", group: "utility", count: service && service.statistics && service.statistics.trashed ? Format.thousands(service.statistics.trashed) : "" },
+    { id: "computer", label: "On this computer", icon: "computer", group: "utility" },
     { id: "sync", label: "Folder sync", icon: "cloudSync", group: "utility" }
   ]
 
@@ -129,12 +142,17 @@ Item {
   property bool helpOpen: false
   property real zoom: service ? Number(service.pref("gridZoom", 1)) || 1 : 1
   property bool fullscreen: false
+  // A phone-width window: tabs at the bottom instead of the sidebar.
+  readonly property bool narrow: narrowOverride || window.width < appTheme.space(640)
+  // Off-screen tests cannot resize the window, so they ask for the layout.
+  property bool narrowOverride: false
 
   readonly property bool needsSetup: ready && service.settingsLoaded && !configured
 
   function go(id) {
     if (id === "settings") {
       settingsOpen = true
+      remember()
       return
     }
     settingsOpen = false
@@ -142,6 +160,7 @@ Item {
     stack = []
     searchBar.clear()
     section = id
+    remember()
     Qt.callLater(focusContent)
   }
 
@@ -150,6 +169,7 @@ Item {
     var next = stack.slice()
     next.push(entry)
     stack = next
+    remember()
     Qt.callLater(focusContent)
   }
 
@@ -157,7 +177,70 @@ Item {
     var next = stack.slice()
     next.pop()
     stack = next
+    remember()
     Qt.callLater(focusContent)
+  }
+
+  // Back and Forward through the places visited, like a browser. Escape
+  // still leaves the innermost thing first; these walk the history.
+  property var history: [{ section: "photos", stack: [], settingsOpen: false }]
+  property int historyIndex: 0
+  property bool restoring: false
+  readonly property bool canGoBackInHistory: historyIndex > 0
+  readonly property bool canGoForward: historyIndex < history.length - 1
+
+  function snapshot() {
+    return { section: section, stack: JSON.parse(JSON.stringify(stack)), settingsOpen: settingsOpen }
+  }
+
+  function remember() {
+    if (restoring) return
+    var current = snapshot()
+    var last = history[historyIndex]
+    if (last && JSON.stringify(last) === JSON.stringify(current)) return
+    var next = history.slice(0, historyIndex + 1)
+    next.push(current)
+    if (next.length > 100) next.shift()
+    history = next
+    historyIndex = next.length - 1
+  }
+
+  function restoreHistory(entry) {
+    restoring = true
+    viewerAsset = null
+    searchBar.clear()
+    section = entry.section
+    stack = JSON.parse(JSON.stringify(entry.stack))
+    settingsOpen = entry.settingsOpen
+    restoring = false
+    Qt.callLater(focusContent)
+  }
+
+  function historyBack() {
+    if (!canGoBackInHistory) return
+    historyIndex--
+    restoreHistory(history[historyIndex])
+  }
+
+  function historyForward() {
+    if (!canGoForward) return
+    historyIndex++
+    restoreHistory(history[historyIndex])
+  }
+
+  function setSettings(on) {
+    if (settingsOpen === on) return
+    settingsOpen = on
+    if (on) viewerAsset = null
+    remember()
+  }
+
+  // Files to upload go through the staging page: look, choose, then upload.
+  function stage(paths, albumId) {
+    if (!paths || paths.length === 0) return
+    settingsOpen = false
+    viewerAsset = null
+    push({ kind: "staging", paths: paths, albumId: albumId || "" })
   }
 
   // Escape: leave the innermost thing first.
@@ -168,7 +251,7 @@ Item {
     if (infoPanel.typing) { infoPanel.finishEditing(); focusContent(); return }
     if (searchBar.focused) { searchBar.clear(); focusContent(); return }
     if (viewerAsset) { closeViewer(); return }
-    if (settingsOpen) { settingsOpen = false; focusContent(); return }
+    if (settingsOpen) { setSettings(false); focusContent(); return }
     var grid = activeGrid()
     if (grid && grid.selecting) { grid.clearSelection(); return }
     if (stack.length > 0) { pop(); return }
@@ -214,7 +297,9 @@ Item {
     switch (id) {
     case "back": goBack(); return
     case "backAlt": closeViewer(); return
-    case "settings": settingsOpen = !settingsOpen; return
+    case "settings": setSettings(!settingsOpen); return
+    case "historyBack": historyBack(); return
+    case "historyForward": historyForward(); return
     case "sync": go("sync"); return
     case "help": helpOpen = !helpOpen; return
     case "fullscreen": fullscreen = !fullscreen; return
@@ -323,6 +408,7 @@ Item {
   Connections {
     target: contentLoader.item && contentLoader.item.grid ? contentLoader.item.grid : null
     ignoreUnknownSignals: true
+    function onDragRequested(assets) { root.startDrag(assets) }
     function onCursorChanged() {
       var grid = root.activeGrid()
       if (root.viewerAsset && viewer.waitingForNext !== 0 && grid.currentAsset()
@@ -344,6 +430,10 @@ Item {
     case "zoomReset": viewer.resetZoom(); return
     case "slideshow": viewer.slideshow = !viewer.slideshow; return
     case "rate":
+      if (preferences.ratings === false) {
+        toast.show("Ratings are turned off in your Immich account settings")
+        return
+      }
       var stars = Number(sequence)
       var current = viewer.details && viewer.details.exif ? Number(viewer.details.exif.rating || 0) : 0
       rate([viewerAsset], current === stars ? 0 : stars)
@@ -368,6 +458,18 @@ Item {
 
   function photoAction(id, assets, grid) {
     if (!assets || assets.length === 0) return
+    // Files only on this computer have nothing in Immich to act on.
+    var remote = assets.filter(function(a) { return a.id && String(a.id).indexOf("local:") !== 0 })
+    if (remote.length < assets.length) {
+      if (remote.length === 0) {
+        toast.show(assets.length === 1 ? "This file is not in Immich yet" : "These files are not in Immich yet", {
+          actionText: "Upload", action: function() { root.uploadLocal(assets) }
+        })
+        return
+      }
+      toast.show(Format.count(assets.length - remote.length, "file") + " not in Immich were left out")
+      assets = remote
+    }
     switch (id) {
     case "favorite": toggleFavorite(assets, grid); return
     case "archive": toggleArchive(assets, grid); return
@@ -646,6 +748,47 @@ Item {
     })
   }
 
+  // Drag photos out of the window as files. Originals are fetched into a
+  // cache first (quick when they were dragged before); files already on
+  // this computer are dragged as they are.
+  property int dragGeneration: 0
+  function startDrag(assets) {
+    var local = []
+    var remote = []
+    for (var i = 0; i < assets.length; i++) {
+      if (assets[i].localPath) local.push("file://" + assets[i].localPath)
+      else if (assets[i].id && String(assets[i].id).indexOf("local:") !== 0) remote.push(assets[i].id)
+    }
+    var generation = ++dragGeneration
+    var begin = function(urls) {
+      if (generation !== root.dragGeneration || urls.length === 0) return
+      dragSource.urls = urls
+      dragSource.image = assets[0] && !assets[0].localPath ? root.service.thumbUrl(assets[0].id, "thumbnail", assets[0].thumbhash) : (local[0] || "")
+      dragSource.Drag.active = true
+    }
+    if (remote.length === 0) {
+      begin(local)
+      return
+    }
+    var slow = Qt.createQmlObject("import QtQuick; Timer { interval: 400; running: true }", root)
+    slow.triggered.connect(function() {
+      if (generation === root.dragGeneration) toast.show("Getting " + Format.count(remote.length, "original") + " ready to drag…", { duration: 4000 })
+      slow.destroy()
+    })
+    service.call("export.prepare", { ids: remote }, function(r, e) {
+      if (e) return root.failed(e)
+      begin(local.concat(r.paths.map(function(p) { return "file://" + p })))
+    })
+  }
+
+  function uploadLocal(assets) {
+    var paths = assets.filter(function(a) { return !!a.localPath }).map(function(a) { return a.localPath })
+    service.call("sync.uploadFiles", { paths: paths }, function(r, e) {
+      if (e) return root.failed(e)
+      toast.show("Uploading " + Format.count(r.queued, "file") + "…", { actionText: "Show progress", action: function() { root.go("sync") } })
+    })
+  }
+
   function removeFromAlbum(assets, grid) {
     var album = albumPage
     if (!album) return
@@ -674,6 +817,26 @@ Item {
     var many = targets.length > 1
     var fav = targets.every(function(a) { return a.isFavorite })
     var items = []
+    if (asset.localPath) {
+      var unsynced = targets.filter(function(a) { return String(a.id).indexOf("local:") === 0 })
+      if (unsynced.length > 0) {
+        menu.items = [
+          { id: "view", label: "View", icon: "image" },
+          { id: "upload", label: unsynced.length > 1 ? "Upload " + unsynced.length + " files now" : "Upload now", icon: "upload" },
+          { id: "folder", label: "Show in folder", icon: "folder" }
+        ]
+        menu.activated.disconnect(root.menuHandler)
+        root.menuHandler = function(id) {
+          if (id === "view") root.openViewer(asset)
+          else if (id === "upload") root.uploadLocal(unsynced)
+          else if (id === "folder") Qt.openUrlExternally("file://" + asset.localPath.slice(0, asset.localPath.lastIndexOf("/")))
+        }
+        menu.activated.connect(root.menuHandler)
+        menu.trigger = null
+        menu.openAt(item, x, y)
+        return
+      }
+    }
     if (!many) items.push({ id: "view", label: "View", icon: "image", shortcut: "enter" })
     items.push({ id: "favorite", label: fav ? "Remove from favourites" : "Add to favourites", icon: fav ? "favoriteOn" : "favorite", shortcut: "f" })
     if (!inTrash) {
@@ -720,7 +883,15 @@ Item {
 
   function runSearch(text) {
     var query = String(text || "").trim()
-    if (!query) return
+    if (!query) {
+      // Enter in an empty search field: filter the whole library instead.
+      settingsOpen = false
+      viewerAsset = null
+      var filterEntry = { kind: "search", query: "", mode: "metadata", filters: {} }
+      if (page && page.kind === "search") replacePage(filterEntry)
+      else push(filterEntry)
+      return
+    }
     var mode = "smart"
     var m = /^(file|filename|ocr|text|desc|description):\s*(.*)$/i.exec(query)
     if (m) {
@@ -733,11 +904,8 @@ Item {
     settingsOpen = false
     viewerAsset = null
     var entry = { kind: "search", query: query, mode: mode, filters: {} }
-    if (page && page.kind === "search") {
-      var next = stack.slice()
-      next[next.length - 1] = entry
-      stack = next
-    } else push(entry)
+    if (page && page.kind === "search") replacePage(entry)
+    else push(entry)
     focusContent()
   }
 
@@ -753,7 +921,7 @@ Item {
     color: appTheme.background
     implicitWidth: appTheme.space(1240)
     implicitHeight: appTheme.space(820)
-    minimumSize: Qt.size(appTheme.space(640), appTheme.space(460))
+    minimumSize: Qt.size(appTheme.space(360), appTheme.space(420))
     visible: false
 
     onVisibleChanged: {
@@ -786,9 +954,12 @@ Item {
     // Mouse back button steps back the way Escape does.
     MouseArea {
       anchors.fill: parent
-      acceptedButtons: Qt.BackButton
+      acceptedButtons: Qt.BackButton | Qt.ForwardButton
       z: -1
-      onClicked: root.goBack()
+      onClicked: function(mouse) {
+        if (mouse.button === Qt.ForwardButton) root.historyForward()
+        else root.goBack()
+      }
     }
 
     // ------------------------------------------------------------ header
@@ -812,11 +983,30 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
         }
         Text {
+          visible: !root.narrow
           text: "Omamich"
           color: appTheme.foreground
           font.family: appTheme.font
           font.pixelSize: appTheme.heading
           anchors.verticalCenter: parent.verticalCenter
+        }
+        Row {
+          visible: root.configured
+          anchors.verticalCenter: parent.verticalCenter
+          IconButton {
+            theme: appTheme
+            icon: "back"
+            enabled: root.canGoBackInHistory
+            tooltip: "Back (Alt+Left)"
+            onClicked: root.historyBack()
+          }
+          IconButton {
+            theme: appTheme
+            icon: "forward"
+            enabled: root.canGoForward
+            tooltip: "Forward (Alt+Right)"
+            onClicked: root.historyForward()
+          }
         }
       }
 
@@ -839,12 +1029,14 @@ Item {
         spacing: appTheme.space(4)
         visible: root.configured
         IconButton {
+          visible: !root.narrow
           theme: appTheme
           icon: "zoomOut"
           tooltip: "Smaller thumbnails"
           onClicked: root.setZoom(root.zoom / 1.2)
         }
         IconButton {
+          visible: !root.narrow
           theme: appTheme
           icon: "zoomIn"
           tooltip: "Larger thumbnails"
@@ -861,14 +1053,14 @@ Item {
           theme: appTheme
           icon: "upload"
           tooltip: "Upload files... (or drop them on the window)"
-          onClicked: uploadDialog.open()
+          onClicked: { uploadDialog.albumId = root.albumPage ? root.albumPage.id : ""; uploadDialog.open() }
         }
         IconButton {
           theme: appTheme
           icon: "settings"
           tooltip: "Settings (Ctrl+,)"
           selected: root.settingsOpen
-          onClicked: root.settingsOpen = !root.settingsOpen
+          onClicked: root.setSettings(!root.settingsOpen)
         }
       }
 
@@ -883,14 +1075,14 @@ Item {
     // ------------------------------------------------------------ body
     Item {
       id: body
-      anchors { left: parent.left; right: parent.right; top: header.bottom; bottom: statusBar.top }
+      anchors { left: parent.left; right: parent.right; top: header.bottom; bottom: bottomNav.top }
 
       readonly property bool compact: width < appTheme.space(820)
 
       Sidebar {
         id: sidebar
         theme: appTheme
-        visible: root.configured && !root.fullscreen
+        visible: root.configured && !root.fullscreen && !root.narrow
         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
         width: visible ? implicitWidth : 0
         sections: root.sections
@@ -902,7 +1094,7 @@ Item {
         footerAttention: !!root.service && root.service.serverError !== ""
         footerIcon: !!root.service && root.service.serverError !== "" ? "cloudOff" : "server"
         onPicked: function(id) { root.go(id) }
-        onFooterClicked: root.settingsOpen = true
+        onFooterClicked: root.setSettings(true)
       }
 
       Item {
@@ -922,6 +1114,7 @@ Item {
               if (p.kind === "place") return placePage
               if (p.kind === "tag") return tagPage
               if (p.kind === "search") return searchPage
+              if (p.kind === "staging") return stagingPage
             }
             switch (root.section) {
             case "explore": return exploreView
@@ -932,6 +1125,7 @@ Item {
             case "tags": return tagsView
             case "folders": return foldersView
             case "sync": return syncView
+            case "computer": return localView
             case "favorites": return favoritesView
             case "archive": return archiveView
             case "trash": return trashView
@@ -946,7 +1140,7 @@ Item {
           sourceComponent: SettingsView {
             theme: appTheme
             service: root.service
-            onClosed: { root.settingsOpen = false; root.focusContent() }
+            onClosed: { root.setSettings(false); root.focusContent() }
             onToast: function(text, tone) { toast.show(text, { tone: tone }) }
           }
         }
@@ -1002,6 +1196,21 @@ Item {
         onInfoToggled: root.setInfo(!root.infoOpen)
         infoOpen: root.infoOpen
         onMenuRequested: function(item) { root.showPhotoMenu(root.viewerAsset, item, 0, item.height) }
+      }
+    }
+
+    // ------------------------------------------------------------ bottom tabs
+    BottomNav {
+      id: bottomNav
+      theme: appTheme
+      anchors { left: parent.left; right: parent.right; bottom: statusBar.top }
+      visible: root.narrow && root.configured && !root.fullscreen
+      height: visible ? implicitHeight : 0
+      sections: root.sections
+      current: root.settingsOpen ? "" : root.section
+      onPicked: function(id) { root.go(id) }
+      onMoreRequested: function(item, rest) {
+        root.showMenu(rest.map(function(s) { return { id: s.id, label: s.label, icon: s.icon } }), item, function(id) { root.go(id) })
       }
     }
 
@@ -1095,11 +1304,21 @@ Item {
     UploadDialog {
       id: uploadDialog
       service: root.service
-      onQueued: function(count) {
-        toast.show(count > 0 ? "Uploading " + Format.count(count, "file") + "…" : "Nothing to upload there", {
-          actionText: count > 0 ? "Show progress" : "", action: function() { root.go("sync") }
-        })
-      }
+      onChosen: function(paths) { root.stage(paths, uploadDialog.albumId) }
+    }
+
+    // The far end of a drag out of the window.
+    Item {
+      id: dragSource
+      width: 1
+      height: 1
+      property var urls: []
+      property string image: ""
+      Drag.dragType: Drag.Automatic
+      Drag.supportedActions: Qt.CopyAction
+      Drag.mimeData: ({ "text/uri-list": dragSource.urls })
+      Drag.imageSource: dragSource.image
+      Drag.onDragFinished: function(action) { dragSource.Drag.active = false }
     }
 
     // Files dropped on the window are uploaded.
@@ -1108,15 +1327,11 @@ Item {
       keys: ["text/uri-list"]
       onDropped: function(drop) {
         if (!drop.hasUrls || !root.configured) return
+        // A drag that started in this window is not an upload.
+        if (dragSource.Drag.active) return
         var paths = []
         for (var i = 0; i < drop.urls.length; i++) paths.push(String(drop.urls[i]))
-        var album = root.albumPage ? root.albumPage.id : ""
-        root.service.call("sync.uploadFiles", { paths: paths, albumId: album }, function(r, e) {
-          if (e) return root.failed(e)
-          toast.show("Uploading " + Format.count(r.queued, "file") + (album ? " into this album" : "") + "…", {
-            actionText: "Show progress", action: function() { root.go("sync") }
-          })
-        })
+        root.stage(paths, root.albumPage ? root.albumPage.id : "")
         drop.accept()
       }
     }
@@ -1327,9 +1542,36 @@ Item {
       onOpenAsset: function(a) { root.openViewer(a) }
       onContextRequested: function(a, item, x, y) { root.showPhotoMenu(a, item, x, y) }
       onModeChanged: function(mode, filters) {
-        var next = root.stack.slice()
-        next[next.length - 1] = Object.assign({}, root.page, { mode: mode, filters: filters })
-        root.stack = next
+        root.replacePage(Object.assign({}, root.page, { mode: mode, filters: filters }))
+      }
+      onPick: function(options) { pickerDialog.ask(options) }
+      onPrompt: function(options) { promptDialog.ask(options) }
+    }
+  }
+  Component {
+    id: stagingPage
+    StagingPage {
+      theme: appTheme; service: root.service
+      entry: root.page
+      onBack: root.pop()
+      onFailed: function(message) { toast.show(message, { tone: "error" }) }
+      onUploaded: function(count, albumName) {
+        root.pop()
+        toast.show("Uploading " + Format.count(count, "file") + (albumName ? " into “" + albumName + "”" : "") + "…", {
+          actionText: "Show progress", action: function() { root.go("sync") }
+        })
+      }
+      onPickAlbum: function(onPicked) {
+        root.service.loadAlbums(true)
+        pickerDialog.ask({
+          title: "Upload into an album",
+          placeholder: "Find or name an album",
+          createLabel: "Create album",
+          items: root.albumItems(),
+          loading: root.service.albumsLoading,
+          emptyText: "No albums yet. Type a name to create one.",
+          onPick: function(item) { onPicked(item); return true }
+        })
       }
     }
   }
@@ -1341,6 +1583,11 @@ Item {
       onPlaceOpened: function(p) { root.go("places"); root.push({ kind: "place", place: p }) }
       onSectionOpened: function(id) { root.go(id) }
       onSearch: function(q) { searchBar.text = q; root.runSearch(q) }
+      onTagOpened: function(t) { root.go("tags"); root.push({ kind: "tag", tag: t }) }
+      showPeople: root.sectionAvailable("people")
+      showPlaces: root.sectionAvailable("places")
+      showTags: root.sectionAvailable("tags")
+      showFolders: root.sectionAvailable("folders")
     }
   }
   Component {
@@ -1401,6 +1648,15 @@ Item {
     }
   }
   Component {
+    id: localView
+    LocalView {
+      theme: appTheme; service: root.service; zoom: root.zoom
+      onOpenAsset: function(a) { root.openViewer(a) }
+      onContextRequested: function(a, item, x, y) { root.showPhotoMenu(a, item, x, y) }
+      onOpenSync: root.go("sync")
+    }
+  }
+  Component {
     id: syncView
     SyncView {
       theme: appTheme; service: root.service
@@ -1413,6 +1669,11 @@ Item {
     var next = stack.slice()
     next[next.length - 1] = entry
     stack = next
+    if (!restoring && history[historyIndex]) {
+      var h = history.slice()
+      h[historyIndex] = snapshot()
+      history = h
+    }
   }
 
   function createAlbum() {

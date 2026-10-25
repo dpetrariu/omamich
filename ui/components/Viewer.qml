@@ -24,8 +24,18 @@ Item {
   property real panX: 0
   property real panY: 0
   property bool playingLive: false
+  property string videoError: ""
 
   readonly property bool isVideo: !!asset && !asset.isImage
+  // A file on this computer: shown from disk; its Immich copy, if any, is
+  // where the details come from.
+  readonly property bool isLocal: !!asset && !!asset.localPath
+  readonly property string remoteId: remoteIdOf(asset)
+  // Read from the asset itself, not the binding above, which may not have
+  // caught up yet inside onAssetChanged.
+  function remoteIdOf(a) {
+    return !a ? "" : a.localPath ? (a.assetId || "") : a.id
+  }
   readonly property bool hasLive: !!asset && !!asset.livePhotoVideoId
   readonly property bool zoomed: zoom > 1.01
 
@@ -44,9 +54,10 @@ Item {
   }
 
   function loadDetails() {
-    var id = asset.id
+    var id = remoteIdOf(asset)
+    if (!id) return
     service.call("asset.get", { id: id }, function(r, e) { if (!root) return;
-      if (!root.asset || root.asset.id !== id) return
+      if (!root.asset || root.remoteIdOf(root.asset) !== id) return
       if (!e) root.details = r
     })
   }
@@ -117,7 +128,9 @@ Item {
       id: preview
       anchors.fill: parent
       visible: !root.isVideo && !full.ready && !root.playingLive
-      source: root.asset && !root.isVideo ? root.service.thumbUrl(root.asset.id, "preview", root.asset.thumbhash) : ""
+      source: !root.asset || root.isVideo ? "" : root.isLocal ? "file://" + root.asset.localPath
+        : root.service.thumbUrl(root.asset.id, "preview", root.asset.thumbhash)
+      sourceSize.width: root.isLocal ? 2560 : 0
       fillMode: Image.PreserveAspectFit
       asynchronous: true
       cache: true
@@ -132,7 +145,7 @@ Item {
       anchors.fill: parent
       visible: ready && !root.isVideo && !root.playingLive
       // Full size is fetched only once the person zooms in.
-      source: root.asset && !root.isVideo && root.zoom > 1.2 ? root.service.thumbUrl(root.asset.id, "fullsize", root.asset.thumbhash) : ""
+      source: root.asset && !root.isVideo && !root.isLocal && root.zoom > 1.2 ? root.service.thumbUrl(root.asset.id, "fullsize", root.asset.thumbhash) : ""
       fillMode: Image.PreserveAspectFit
       asynchronous: true
       cache: false
@@ -153,12 +166,16 @@ Item {
       id: player
       videoOutput: videoOut
       audioOutput: AudioOutput { id: audio; volume: 0.9; muted: root.playingLive }
-      source: !root.asset ? "" : root.isVideo ? root.service.videoUrl(root.asset.id)
+      source: !root.asset ? "" : root.isVideo ? (root.isLocal ? "file://" + root.asset.localPath : root.service.videoUrl(root.asset.id))
         : root.playingLive ? root.service.videoUrl(root.asset.livePhotoVideoId) : ""
-      onSourceChanged: if (source != "") play()
+      onSourceChanged: {
+        root.videoError = ""
+        if (source != "") play()
+      }
       onPlaybackStateChanged: {
         if (root.playingLive && playbackState === MediaPlayer.StoppedState) root.playingLive = false
       }
+      onErrorOccurred: function(error, message) { root.videoError = message || "This video could not be played" }
       onMediaStatusChanged: {
         if (mediaStatus === MediaPlayer.EndOfMedia && root.slideshow) root.stepRequested(1)
       }
@@ -409,6 +426,15 @@ Item {
     repeat: true
     running: root.slideshow && root.visible && !root.isVideo
     onTriggered: root.stepRequested(1)
+  }
+
+  Text {
+    anchors.centerIn: parent
+    visible: root.isVideo && root.videoError !== ""
+    text: "This video could not be played"
+    color: "white"
+    font.family: root.theme.font
+    font.pixelSize: root.theme.body
   }
 
   Text {

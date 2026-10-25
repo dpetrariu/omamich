@@ -30,6 +30,9 @@ Item {
   // Only ever fed by a pager; without one it shows nothing rather than the
   // whole timeline.
   property bool listOnly: false
+  // How paged results are ordered: "", "newest", "oldest", "name", "type"
+  // or "sync". Timeline months are ordered by the server instead.
+  property string sortMode: ""
 
   readonly property bool listMode: typeof pager === "function"
   readonly property real targetHeight: Math.round(theme.space(200) * zoom)
@@ -56,11 +59,19 @@ Item {
 
   signal opened(var asset)
   signal contextRequested(var asset, Item item, real x, real y)
+  signal dragRequested(var assets)
 
   // ------------------------------------------------------------- loading
 
-  onScopeChanged: if (!listMode) Qt.callLater(reload)
-  onPagerChanged: Qt.callLater(reload)
+  onScopeChanged: if (!listMode) reloadTimer.restart()
+  onPagerChanged: reloadTimer.restart()
+
+  // Coalesces reload requests; dies with the view, so it never fires late.
+  Timer {
+    id: reloadTimer
+    interval: 0
+    onTriggered: root.reload()
+  }
   onContentWidthChanged: relayoutTimer.restart()
   onZoomChanged: relayoutTimer.restart()
 
@@ -71,6 +82,8 @@ Item {
   }
 
   function reload() {
+    // A deferred reload can land on a view that is being torn down.
+    if (typeof root.clearSelection !== "function" || !root.service) return
     generation++
     buckets = []
     assetsOf = ({})
@@ -131,7 +144,7 @@ Item {
       root.page = next
       root.hasMore = !!more
       var existing = root.assetsOf._list || []
-      var combined = existing.concat(items || [])
+      var combined = root.sorted(existing.concat(items || []))
       var map = Object.assign({}, root.assetsOf)
       map._list = combined
       root.assetsOf = map
@@ -141,6 +154,34 @@ Item {
       root.rebuild()
       if (root.cursor === null && combined.length > 0) root.cursor = { bucket: "_list", index: 0 }
     })
+  }
+
+  function sorted(list) {
+    var mode = sortMode
+    if (!mode) return list
+    var syncOrder = { failed: 0, localOnly: 1, pending: 2, skipped: 3, done: 4 }
+    var copy = list.slice()
+    copy.sort(function(a, b) {
+      var da = String(a.fileCreatedAt || ""), db = String(b.fileCreatedAt || "")
+      switch (mode) {
+      case "oldest": return da < db ? -1 : da > db ? 1 : 0
+      case "name": return String(a.originalFileName || "").toLowerCase().localeCompare(String(b.originalFileName || "").toLowerCase())
+      case "type": return (a.isImage === b.isImage ? 0 : a.isImage ? -1 : 1) || (da < db ? 1 : da > db ? -1 : 0)
+      case "sync": return ((syncOrder[a.syncState] || 0) - (syncOrder[b.syncState] || 0)) || (da < db ? 1 : da > db ? -1 : 0)
+      default: return da < db ? 1 : da > db ? -1 : 0
+      }
+    })
+    return copy
+  }
+
+  onSortModeChanged: {
+    if (!listMode || !assetsOf._list) return
+    var map = Object.assign({}, assetsOf)
+    map._list = sorted(map._list)
+    assetsOf = map
+    cursor = map._list.length ? { bucket: "_list", index: 0 } : null
+    layoutBucket("_list")
+    rebuild()
   }
 
   function ensureLoaded(key) {
@@ -694,6 +735,10 @@ Item {
                   root.cursor = { bucket: rowItem.bucket, index: assetIndex }
                   root.contextRequested(asset, this, x, y)
                 }
+                onDragRequested: {
+                  // Dragging a selected photo drags the whole selection.
+                  root.dragRequested(root.selecting && root.selected[asset.id] ? root.targets() : [asset])
+                }
               }
             }
           }
@@ -915,7 +960,7 @@ Item {
     font.pixelSize: root.theme.body
   }
 
-  Component.onCompleted: Qt.callLater(reload)
+  Component.onCompleted: reloadTimer.restart()
   Connections {
     target: root.service
     function onReadyChanged() { if (root.service.ready) root.reload() }

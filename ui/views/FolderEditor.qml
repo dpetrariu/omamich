@@ -16,7 +16,9 @@ Rectangle {
   signal saved()
   signal cancelled()
 
-  readonly property bool hasAlbum: albumField.text.trim() !== ""
+  property bool perSubfolder: false
+  readonly property bool hasAlbum: albumField.text.trim() !== "" && !perSubfolder
+  readonly property bool usesAlbums: albumField.text.trim() !== "" || perSubfolder
   property string method: "upload"
   property bool ignoreHidden: true
   property bool mirrorLocal: false
@@ -34,6 +36,7 @@ Rectangle {
     mirrorLocal = folder.mirrorLocalDeletes === true
     mirrorRemote = folder.mirrorRemoteDeletes === true
     enabledFolder = folder.enabled !== false
+    perSubfolder = folder.albumPerSubfolder === true
     error = ""
     busy = false
   }
@@ -51,7 +54,8 @@ Rectangle {
       ignoreHidden: ignoreHidden,
       maxFileSizeMb: Number(sizeField.text) || 0,
       extensions: extField.text.split(/[\s,]+/).filter(function(s) { return s }),
-      mirrorLocalDeletes: hasAlbum && method !== "download" && mirrorLocal,
+      albumPerSubfolder: perSubfolder,
+      mirrorLocalDeletes: usesAlbums && (perSubfolder || method !== "download") && mirrorLocal,
       mirrorRemoteDeletes: hasAlbum && method !== "upload" && mirrorRemote
     }
     service.call("sync.folderSave", { folder: next }, function(r, e) { if (!root) return;
@@ -98,7 +102,20 @@ Rectangle {
       TextButton { id: browse; theme: root.theme; text: "Browse..."; onClicked: picker.open() }
     }
 
-    Text { text: "Album (optional)"; color: root.theme.dim; font.family: root.theme.font; font.pixelSize: root.theme.small }
+    SwitchRow {
+      theme: root.theme
+      checked: root.perSubfolder
+      text: "One album per subfolder"
+      detail: "Photos in Trips/Rome go into an album called Rome. Uploads only."
+      onToggled: root.perSubfolder = !root.perSubfolder
+    }
+
+    Text {
+      text: root.perSubfolder ? "Album for files directly in the folder (optional)" : "Album (optional)"
+      color: root.theme.dim
+      font.family: root.theme.font
+      font.pixelSize: root.theme.small
+    }
     TextField {
       id: albumField
       width: parent.width
@@ -117,7 +134,8 @@ Rectangle {
     Text {
       width: parent.width
       wrapMode: Text.Wrap
-      text: !root.hasAlbum ? "Without an album, new files here upload into your library."
+      text: root.perSubfolder ? "Each subfolder's photos go into an album named after it" + (albumField.text.trim() ? "; loose files go into “" + albumField.text.trim() + "”." : "; loose files go into an album named after this folder.")
+        : !root.hasAlbum ? "Without an album, new files here upload into your library."
         : root.method === "upload" ? "New files here upload and are added to “" + albumField.text.trim() + "” (created if needed)."
         : root.method === "download" ? "Photos in “" + albumField.text.trim() + "” are downloaded into this folder."
         : "New files here upload into “" + albumField.text.trim() + "”, and photos added to it elsewhere download here."
@@ -147,9 +165,9 @@ Rectangle {
     SwitchRow {
       theme: root.theme
       checked: root.mirrorLocal
-      enabled: root.hasAlbum && root.method !== "download"
+      enabled: root.usesAlbums && (root.perSubfolder || root.method !== "download")
       text: "Deleting a file here moves it to the Immich trash"
-      detail: root.hasAlbum ? "Only photos this folder uploaded. A file moved to another synced folder is not deleted." : "Needs an album."
+      detail: root.usesAlbums ? "Only photos this folder uploaded. A file moved to another synced folder is not deleted." : "Needs an album."
       onToggled: root.mirrorLocal = !root.mirrorLocal
     }
     SwitchRow {

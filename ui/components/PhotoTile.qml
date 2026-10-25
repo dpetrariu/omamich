@@ -19,6 +19,8 @@ Item {
   signal doubleClicked()
   signal rightClicked(real x, real y)
   signal toggleSelect(var mouse)
+  // Pressed and moved: the person wants to drag the photo out as a file.
+  signal dragRequested()
 
   readonly property bool hovered: mouse.containsMouse
   readonly property string placeholderColor: Thumbhash.averageColor(asset ? asset.thumbhash : "")
@@ -44,7 +46,9 @@ Item {
     Image {
       id: image
       anchors.fill: parent
-      source: root.asset ? root.service.thumbUrl(root.asset.id, "thumbnail", root.asset.thumbhash) : ""
+      source: !root.asset ? ""
+        : root.asset.localPath ? (root.asset.isImage ? "file://" + root.asset.localPath : "")
+        : root.service.thumbUrl(root.asset.id, "thumbnail", root.asset.thumbhash)
       fillMode: Image.PreserveAspectCrop
       asynchronous: true
       cache: true
@@ -98,7 +102,7 @@ Item {
     }
 
     Glyph {
-      visible: !!root.asset && root.asset.isFavorite
+      visible: !!root.asset && root.asset.isFavorite === true
       anchors { left: parent.left; bottom: parent.bottom; margins: root.theme.space(6) }
       name: "favoriteOn"
       size: root.theme.icon
@@ -119,6 +123,42 @@ Item {
       }
       Glyph { name: "stack"; size: root.theme.small; color: "white"; font.family: root.theme.font }
     }
+  }
+
+  // Where a file on this computer stands with Immich.
+  Rectangle {
+    visible: !!root.asset && !!root.asset.syncState
+    anchors { right: parent.right; bottom: parent.bottom; margins: root.theme.space(6) }
+    width: root.theme.space(22)
+    height: width
+    radius: width / 2
+    z: 2
+    color: root.asset && root.asset.syncState === "failed" ? root.theme.urgent : Qt.rgba(0, 0, 0, 0.55)
+    Glyph {
+      anchors.centerIn: parent
+      size: root.theme.small
+      color: "white"
+      font.family: root.theme.font
+      name: {
+        switch (root.asset ? root.asset.syncState : "") {
+        case "done": return "cloudCheck"
+        case "pending": return "sync"
+        case "failed": return "warning"
+        case "skipped": return "eyeOff"
+        default: return "cloudOff"
+        }
+      }
+    }
+  }
+
+  // A local video has no thumbnail; say what it is.
+  Glyph {
+    visible: !!root.asset && !!root.asset.localPath && !root.asset.isImage
+    anchors.centerIn: parent
+    name: "video"
+    size: root.theme.display
+    color: root.theme.dim
+    font.family: root.theme.font
   }
 
   // The keyboard cursor: a ring, so it reads on any photo.
@@ -170,8 +210,24 @@ Item {
     anchors.fill: parent
     hoverEnabled: true
     acceptedButtons: Qt.LeftButton | Qt.RightButton
-    cursorShape: Qt.PointingHandCursor
+    cursorShape: dragging ? Qt.DragCopyCursor : Qt.PointingHandCursor
+    preventStealing: dragging
+    property point start
+    property bool dragging: false
+    onPressed: function(mouse) {
+      start = Qt.point(mouse.x, mouse.y)
+      dragging = false
+    }
+    onPositionChanged: function(mouse) {
+      if (!pressed || dragging || !(mouse.buttons & Qt.LeftButton)) return
+      if (Math.abs(mouse.x - start.x) + Math.abs(mouse.y - start.y) > 14) {
+        dragging = true
+        root.dragRequested()
+      }
+    }
+    onReleased: Qt.callLater(function() { mouse.dragging = false })
     onClicked: function(mouse) {
+      if (dragging) return
       if (mouse.button === Qt.RightButton) root.rightClicked(mouse.x, mouse.y)
       else root.clicked(mouse)
     }

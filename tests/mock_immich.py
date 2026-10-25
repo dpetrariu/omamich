@@ -35,6 +35,7 @@ ALBUMS = {}    # id -> {id, albumName, assetIds, description, order, cover, owne
 TAGS = {}      # id -> {id, name, value, color, assetIds}
 LINKS = {}     # id -> link
 PEOPLE = {}    # id -> {id, name, birthDate, isHidden, isFavorite, assetIds}
+PREFS = {"folders": True, "tags": True, "people": True, "sharedLinks": True, "ratings": True}
 PARTNERS = {"by": {}, "with": {}}   # by: I share with uid; with: uid shares with me {uid: inTimeline}
 LOG = []
 
@@ -241,8 +242,12 @@ def seed():
                        "assetIds": [ids[k] for k in range(p, len(ids), 4)]}
     for name, members in (("family", ids[0:6]), ("trip/2026", ids[12:18])):
         tid = str(uuid.uuid4())
-        TAGS[tid] = {"id": tid, "name": name, "value": name, "color": "#4a90d9" if name == "family" else None,
-                     "assetIds": list(members)}
+        TAGS[tid] = {"id": tid, "name": name.split("/")[-1], "value": name, "color": "#4a90d9" if name == "family" else None,
+                     "parentId": None, "assetIds": list(members)}
+    trip = next(t for t in TAGS.values() if t["value"] == "trip/2026")
+    parent_id = str(uuid.uuid4())
+    TAGS[parent_id] = {"id": parent_id, "name": "trip", "value": "trip", "color": None, "parentId": None, "assetIds": []}
+    trip["parentId"] = parent_id
     summer = str(uuid.uuid4())
     ALBUMS[summer] = {"id": summer, "albumName": "Summer", "assetIds": ids[14:24], "description": "Lake days",
                       "order": "desc", "cover": None, "ownerId": ME, "users": {}}
@@ -318,6 +323,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, dict(USERS[ME], isAdmin=True, quotaUsageInBytes=0, quotaSizeInBytes=None))
         if path == "/api/users":
             return self.reply(200, list(USERS.values()))
+        if path == "/api/users/me/preferences":
+            return self.reply(200, {k: {"enabled": v} for k, v in PREFS.items()})
         if path == "/api/server/about":
             return self.reply(200, {"version": "v3.3.1", "build": "test", "repository": "immich-app/immich", "licensed": False})
         if path == "/api/server/features":
@@ -390,6 +397,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, [{"id": a["id"], "lat": a["lat"], "lon": a["lon"], "city": a["city"], "state": None,
                                      "country": a["country"]} for a in ASSETS.values() if a["lat"] is not None and not a["isTrashed"]])
         if path == "/api/search/suggestions":
+            if q.get("type") == "camera-make":
+                return self.reply(200, sorted({a["make"] for a in ASSETS.values() if a["make"]}))
+            if q.get("type") == "camera-model":
+                return self.reply(200, sorted({a["model"] for a in ASSETS.values() if a["model"] and a["make"] == q.get("make")}))
             if q.get("type") == "country":
                 return self.reply(200, sorted({a["country"] for a in ASSETS.values() if a["country"]}))
             return self.reply(200, sorted({a["city"] for a in ASSETS.values() if a["city"]}))
@@ -417,9 +428,15 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authed():
             return
         raw = self.body()
+        if path == "/_prefs":
+            with LOCK:
+                PREFS.update(json.loads(raw))
+            return self.reply(200, PREFS)
         if path == "/api/assets":
             parts = parse_multipart(raw, self.headers["Content-Type"])
             data, filename = parts["assetData"]
+            if "broken" in filename:
+                return self.reply(400, {"message": "Unsupported file"})
             b64 = checksum_b64(data)
             with LOCK:
                 found = next((a for a in ASSETS.values() if a["checksum"] == b64), None)
@@ -475,6 +492,23 @@ class Handler(BaseHTTPRequestHandler):
                 items = [a for a in items if a["type"] == body["type"]]
             if body.get("isFavorite"):
                 items = [a for a in items if a["isFavorite"]]
+            for person_id in body.get("personIds", []):
+                members = PEOPLE.get(person_id, {}).get("assetIds", [])
+                items = [a for a in items if a["id"] in members]
+            for tag_id in body.get("tagIds", []):
+                members = TAGS.get(tag_id, {}).get("assetIds", [])
+                items = [a for a in items if a["id"] in members]
+            if body.get("takenAfter"):
+                items = [a for a in items if a["fileCreatedAt"] >= body["takenAfter"]]
+            if body.get("takenBefore"):
+                items = [a for a in items if a["fileCreatedAt"] <= body["takenBefore"]]
+            if body.get("make"):
+                items = [a for a in items if a["make"] == body["make"]]
+            if body.get("model"):
+                items = [a for a in items if a["model"] == body["model"]]
+            if body.get("isNotInAlbum"):
+                in_albums = {i for al in ALBUMS.values() for i in al["assetIds"]}
+                items = [a for a in items if a["id"] not in in_albums]
             items.sort(key=lambda a: a["fileCreatedAt"], reverse=True)
             return self.reply(200, search_page(items, body))
         if path == "/api/albums":
@@ -523,6 +557,22 @@ class Handler(BaseHTTPRequestHandler):
             return getattr(self, method.lower())(path, body)
 
     def put(self, path, body):
+        if path == "/api/tags":
+            # Upsert by path, creating parents, like Immich.
+            out = []
+            for full in body["tags"]:
+                parent = None
+                parts = [p for p in full.split("/") if p]
+                for depth in range(len(parts)):
+                    value = "/".join(parts[:depth + 1])
+                    tag = next((t for t in TAGS.values() if t["value"] == value), None)
+                    if not tag:
+                        tag_id = str(uuid.uuid4())
+                        tag = TAGS[tag_id] = {"id": tag_id, "name": parts[depth], "value": value, "color": None,
+                                              "parentId": parent, "assetIds": []}
+                    parent = tag["id"]
+                out.append({k: v for k, v in tag.items() if k != "assetIds"})
+            return self.reply(200, out)
         if path == "/api/assets":
             for i in body["ids"]:
                 for k in ("isFavorite", "visibility", "rating"):

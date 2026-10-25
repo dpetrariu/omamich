@@ -79,7 +79,8 @@ class Harness:
         self.log.flush()
         with open(os.path.join(self.root, "qs.log")) as f:
             return [line for line in f if "omamich" in line and ("TypeError" in line or "ReferenceError" in line
-                    or "unavailable" in line or "Error:" in line or "is not a type" in line)]
+                    or "unavailable" in line or "Error:" in line or "is not a type" in line or "Unable to assign" in line
+                    or "Cannot assign" in line or "Binding loop" in line)]
 
     def stop(self):
         self.proc.terminate()
@@ -91,6 +92,23 @@ class Harness:
 
 def state(port):
     return json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/_state"))
+
+
+def fetch(port, path):
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers={"x-api-key": KEY})
+    return urllib.request.urlopen(request).read()
+
+
+def set_prefs(port, **prefs):
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/_prefs", data=json.dumps(prefs).encode(),
+                                     headers={"x-api-key": KEY, "Content-Type": "application/json"}, method="POST")
+    urllib.request.urlopen(request).read()
+
+
+def mock_png(color):
+    sys.path.insert(0, HERE)
+    import mock_immich
+    return mock_immich.png(64, 48, color)
 
 
 def asset_named(port, name):
@@ -277,6 +295,132 @@ def main():
         h.js("service.call('partner.add', { userId: '11111111-1111-4111-8111-333333333333' }, function() {})")
         wait_for("sharing with Ben", lambda: "11111111-1111-4111-8111-333333333333" in state(port)["partners"]["by"])
         print("ok: sharing view and partners")
+
+        # Pages turned off in the Immich account are left out.
+        set_prefs(port, folders=False, tags=False)
+        h.js("service.refreshServer()")
+        wait_for("Folders and Tags leave the sidebar", lambda: not ({"folders", "tags"} & set(h.value("app.sections.map(function(s){return s.id})"))))
+        h.nav("go:explore", 2)
+        assert h.value("hooks.content.item.showTags") is False
+        set_prefs(port, folders=True, tags=True)
+        h.js("service.refreshServer()")
+        wait_for("they come back", lambda: {"folders", "tags"} <= set(h.value("app.sections.map(function(s){return s.id})")))
+        print("ok: account preferences hide pages")
+
+        # Back and forward through history.
+        h.nav("go:people", 1)
+        h.nav("go:albums", 1)
+        h.nav("historyBack", 1)
+        assert h.value("app.section") == "people"
+        h.nav("historyForward", 1)
+        assert h.value("app.section") == "albums"
+        assert h.value("app.canGoForward") is False
+        print("ok: back and forward")
+
+        # Oldest first.
+        h.nav("go:photos", 2)
+        wait_for("timeline", lambda: h.value("app.activeGrid() ? app.activeGrid().buckets.length : 0") > 0)
+        newest = h.value("app.activeGrid().buckets[0].key")
+        h.js("hooks.content.item.order = 'asc'")
+        wait_for("oldest month first", lambda: h.value("app.activeGrid().buckets.length ? app.activeGrid().buckets[0].key : ''") not in ("", newest))
+        assert h.value("app.activeGrid().buckets[0].key") < newest
+        h.js("hooks.content.item.order = 'desc'")
+        print("ok: oldest first")
+
+        # Search filters, with and without words.
+        h.nav("search:", 2)
+        assert h.value("app.page.kind") == "search" and h.value("app.page.query") == ""
+        wait_for("unfiltered results", lambda: h.value("app.activeGrid().total") > 0)
+        everything = h.value("app.activeGrid().total")
+        h.js("service.loadPeople()")
+        wait_for("people known", lambda: h.value("service.people.length") == 5)
+        h.js("hooks.content.item.choosePerson()")
+        h.js("hooks.picker.choose('Alvar')")
+        wait_for("only Alvar", lambda: 0 < h.value("app.activeGrid().total") < everything)
+        alvar = h.value("app.activeGrid().total")
+        h.shot("21-filter-person")
+        h.js("hooks.content.item.chooseDates()")
+        h.js("hooks.prompt.submitText('nonsense')")
+        assert "Try" in h.value("hooks.prompt.error")
+        h.js("hooks.prompt.submitText('2026-09')")
+        wait_for("Alvar in September", lambda: h.value("app.activeGrid().total") < alvar)
+        h.js("hooks.content.item.setFilters({ personIds: null, takenAfter: null, takenBefore: null }, { people: null, dates: null })")
+        wait_for("filters cleared", lambda: h.value("app.activeGrid().total") == everything)
+        h.js("hooks.content.item.chooseCamera()")
+        time.sleep(1)
+        h.js("hooks.picker.choose('Fujifilm')")
+        wait_for("model picker", lambda: h.value("hooks.picker.opened && hooks.picker.title === 'Fujifilm'") is True)
+        h.js("hooks.picker.choose('Any')")
+        wait_for("only Fujifilm photos", lambda: 0 < h.value("app.activeGrid().total") < everything)
+        h.shot("22-filter-camera")
+        h.js("hooks.content.item.sortMode = 'name'")
+        time.sleep(0.5)
+        names = h.value("app.activeGrid().assetsOf._list.map(function(a){return a.originalFileName})")
+        assert names == sorted(names, key=str.lower), names
+        print("ok: search filters by person, dates and camera, and sorting results")
+
+        # Tags as a tree, with counts and nested creation.
+        h.nav("go:tags", 2)
+        wait_for("tag counts", lambda: len(h.value("Object.keys(hooks.content.item.counts)")) >= 3)
+        h.js("hooks.content.item.createTag('')")
+        h.js("hooks.prompt.submitText('Trips/2024')")
+        wait_for("nested tag created", lambda: {"Trips", "Trips/2024"} <= {t["name"] if "/" not in t["name"] else t["name"] for t in state(port)["tags"].values()} or {"Trips", "2024"} <= {t["name"] for t in state(port)["tags"].values()})
+        wait_for("the tree shows it under Trips", lambda: any(r["value"] == "Trips/2024" and r["depth"] == 1 for r in h.value("hooks.content.item.rows.map(function(r){return {value: r.value, depth: r.depth}})")))
+        h.js("hooks.content.item.setCollapsed('Trips', true)")
+        assert not any(r == "Trips/2024" for r in h.value("hooks.content.item.rows.map(function(r){return r.value})"))
+        h.shot("23-tags-tree")
+        h.nav("go:explore", 3)
+        wait_for("explore shows tags", lambda: h.value("hooks.content.item.topTags.length") > 0)
+        h.shot("24-explore-tags")
+        print("ok: tag tree, counts, nested tags and explore tags")
+
+        # Upload staging: look, choose an album, upload.
+        stage = os.path.join(root, "to-upload")
+        os.makedirs(os.path.join(stage, "more"))
+        some_id = next(iter(state(port)["assets"]))
+        with open(os.path.join(stage, "same.png"), "wb") as f:
+            f.write(fetch(port, f"/api/assets/{some_id}/original"))
+        for name, color in (("fresh.png", (10, 200, 30)), ("more/also.png", (200, 10, 30))):
+            with open(os.path.join(stage, name), "wb") as f:
+                f.write(mock_png(color))
+        h.js(f"app.stage(['{stage}'], '')")
+        wait_for("staging lists three", lambda: h.value("app.page && app.page.kind === 'staging' && hooks.content.item ? hooks.content.item.items.length : 0") == 3)
+        wait_for("one is already in Immich", lambda: h.value("hooks.content.item.knownCount") == 1)
+        h.shot("25-staging")
+        h.js("hooks.content.item.chooseAlbum()")
+        h.js("hooks.picker.choose('Holiday 2026')")
+        assert h.value("hooks.content.item.targetKind") == "new"
+        h.js("hooks.content.item.upload()")
+        wait_for("all three end up in the new album", lambda: len(state(port)["albums"].get("Holiday 2026", [])) == 3, 40)
+        assert h.value("app.page") is None, "staging closes after uploading"
+        print("ok: upload staging into a new album")
+
+        # The synced folder as seen from the library.
+        h.js(f"service.call('sync.folderSave', {{ folder: {{ path: '{stage}' }} }}, function(r) {{ service.applySettingsResponse(r) }})")
+        wait_for("On this computer appears", lambda: "computer" in h.value("app.sections.map(function(s){return s.id})"))
+        h.nav("go:computer", 2)
+        wait_for("it lists the files", lambda: h.value("hooks.content.item.localTotal") == 3)
+        h.js("service.updateSettings({ sync: { enabled: true, pauseOnMetered: false } })")
+        wait_for("sync marks them as in Immich", lambda: h.value("app.activeGrid().assetsOf._list ? app.activeGrid().assetsOf._list.filter(function(a){return a.syncState === 'done'}).length : 0") == 3, 40)
+        h.shot("26-on-this-computer")
+        h.nav("first")
+        h.nav("open", 1.5)
+        assert h.value("app.viewerAsset.localPath").startswith(stage)
+        wait_for("details from Immich", lambda: h.value("hooks.viewer.details ? hooks.viewer.details.id : ''") != "")
+        h.shot("27-local-viewer")
+        h.nav("back", 1)
+        h.js("service.updateSettings({ sync: { enabled: false } })")
+        print("ok: on this computer, with sync states and the viewer")
+
+        # A phone-width window: tabs at the bottom.
+        h.js("app.narrowOverride = true")
+        wait_for("narrow layout", lambda: h.value("app.narrow") is True)
+        time.sleep(1)
+        assert h.value("app.sections.length") > 5
+        h.shot("28-narrow")
+        h.js("app.narrowOverride = false")
+        wait_for("wide again", lambda: h.value("app.narrow") is False)
+        print("ok: narrow layout")
 
         # The remaining views render without errors.
         for section in ("favorites", "tags", "folders", "sync"):

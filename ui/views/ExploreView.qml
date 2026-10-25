@@ -19,6 +19,28 @@ Item {
   signal personOpened(var person)
   signal placeOpened(var place)
   signal sectionOpened(string id)
+  signal tagOpened(var tag)
+
+  property bool showPeople: true
+  property bool showPlaces: true
+  property bool showTags: true
+  property bool showFolders: true
+  property var tagCovers: ({})
+  // The most used tags, once their counts are known.
+  readonly property var topTags: service.tags.filter(function(t) { return root.tagCovers[t.id] && root.tagCovers[t.id].count > 0 })
+    .sort(function(a, b) { return root.tagCovers[b.id].count - root.tagCovers[a.id].count }).slice(0, 14)
+
+  function loadTagCovers() {
+    if (!showTags || service.tags.length === 0) return
+    service.call("tags.covers", { ids: service.tags.slice(0, 60).map(function(t) { return t.id }) }, function(r, e) {
+      if (!root) return
+      if (!e) root.tagCovers = r
+    })
+  }
+  Connections {
+    target: root.service
+    function onTagsChanged() { root.loadTagCovers() }
+  }
   signal search(string query)
 
   function reload() { load(); service.loadPeople(true); service.loadPlaces(true) }
@@ -31,7 +53,12 @@ Item {
     })
   }
 
-  Component.onCompleted: { load(); service.loadPeople(); service.loadPlaces() }
+  Component.onCompleted: {
+    load()
+    if (showPeople) service.loadPeople()
+    if (showPlaces) service.loadPlaces()
+    if (showTags) service.loadTags()
+  }
 
   readonly property var topPeople: service.people.filter(function(p) { return p.name && !p.isHidden }).slice(0, 16)
   readonly property var topPlaces: service.places.slice(0, 16)
@@ -58,8 +85,9 @@ Item {
         subtitle: root.service.statistics ? Format.thousands(root.service.statistics.images) + " photos and " + Format.thousands(root.service.statistics.videos) + " videos" : ""
       }
 
-      SectionTitle { theme: root.theme; text: "People"; action: "All people"; onActionClicked: root.sectionOpened("people") }
+      SectionTitle { visible: root.showPeople; theme: root.theme; text: "People"; action: "All people"; onActionClicked: root.sectionOpened("people") }
       ListView {
+        visible: root.showPeople
         width: parent.width
         height: root.theme.space(124)
         orientation: ListView.Horizontal
@@ -100,8 +128,9 @@ Item {
         }
       }
 
-      SectionTitle { theme: root.theme; text: "Places"; action: "All places"; onActionClicked: root.sectionOpened("places") }
+      SectionTitle { visible: root.showPlaces; theme: root.theme; text: "Places"; action: "All places"; onActionClicked: root.sectionOpened("places") }
       ListView {
+        visible: root.showPlaces
         width: parent.width
         height: root.theme.space(170)
         orientation: ListView.Horizontal
@@ -141,6 +170,41 @@ Item {
         }
       }
 
+      SectionTitle { visible: root.showTags && root.topTags.length > 0; theme: root.theme; text: "Tags"; action: "All tags"; onActionClicked: root.sectionOpened("tags") }
+      ListView {
+        visible: root.showTags && root.topTags.length > 0
+        width: parent.width
+        height: root.theme.space(170)
+        orientation: ListView.Horizontal
+        spacing: root.theme.space(12)
+        clip: true
+        model: root.topTags
+        boundsBehavior: Flickable.StopAtBounds
+        delegate: Item {
+          required property var modelData
+          width: root.theme.space(150)
+          height: root.theme.space(170)
+          RoundImage {
+            id: tagCover
+            width: parent.width; height: root.theme.space(130)
+            radius: root.theme.radius + root.theme.space(4)
+            fill: root.theme.raised
+            sourceSize: 300
+            source: root.tagCovers[modelData.id] && root.tagCovers[modelData.id].assetId ? root.service.thumbUrl(root.tagCovers[modelData.id].assetId, "thumbnail", "") : ""
+          }
+          Text {
+            anchors { top: tagCover.bottom; topMargin: root.theme.space(6); left: parent.left; right: parent.right }
+            text: (modelData.value || modelData.name) + "  ·  " + Format.thousands(root.tagCovers[modelData.id] ? root.tagCovers[modelData.id].count : 0)
+            textFormat: Text.PlainText
+            elide: Text.ElideRight
+            color: root.theme.foreground
+            font.family: root.theme.font
+            font.pixelSize: root.theme.small
+          }
+          MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.tagOpened(modelData) }
+        }
+      }
+
       SectionTitle { theme: root.theme; text: "Try a search"; visible: root.service.features.smartSearch !== false }
       Flow {
         width: parent.width
@@ -167,12 +231,13 @@ Item {
           model: [
             { id: "favorites", label: "Favourites", icon: "favorite" },
             { id: "albums", label: "Albums", icon: "albums" },
-            { id: "tags", label: "Tags", icon: "tags" },
-            { id: "folders", label: "Folders", icon: "folders" },
+            { id: "tags", label: "Tags", icon: "tags", hidden: !root.showTags },
+            { id: "folders", label: "Folders", icon: "folders", hidden: !root.showFolders },
             { id: "archive", label: "Archive", icon: "archive" }
           ]
           delegate: TextButton {
             required property var modelData
+            visible: !modelData.hidden
             theme: root.theme
             text: modelData.label
             icon: modelData.icon

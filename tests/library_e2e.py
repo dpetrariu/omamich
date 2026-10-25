@@ -99,8 +99,16 @@ def main():
         assert [x["value"] for x in backend.call("tags.list", {})] == ["family"]
         detail = backend.call("asset.get", {"id": one})
         assert [x["name"] for x in detail["tags"]] == ["family"]
+        nested = backend.call("tag.create", {"name": "Trips/2024/"})
+        assert nested["value"] == "Trips/2024" and nested["parentId"], nested
+        values = sorted(t["value"] for t in backend.call("tags.list", {}))
+        assert values == ["Trips", "Trips/2024", "family"], values
+        covers = backend.call("tags.covers", {"ids": [tag["id"], nested["id"], "../x"]})
+        assert covers[tag["id"]]["count"] == 1 and covers[tag["id"]]["assetId"] == one, covers
+        assert covers[nested["id"]]["count"] == 0 and "../x" not in covers, covers
+        expect_error(backend, "tag.create", {"name": "a//b"}, "levels")
         backend.call("tag.delete", {"id": tag["id"]})
-        print("ok: tags")
+        print("ok: tags, nested tags and counts")
 
         # Shared links
         link = backend.call("sharedLink.create", {"assetIds": [one], "allowDownload": False, "expiresInDays": 7, "password": "pw"})
@@ -153,6 +161,36 @@ def main():
         backend.call("asset.deleteForever", {"ids": [one]})
         assert one not in state(port)["assets"]
         print("ok: download, trash, restore and delete")
+
+        # Drag-out export: originals into the cache, reused the second time.
+        exported = backend.call("export.prepare", {"ids": [two]})["paths"]
+        assert exported[0].endswith("/two.jpg") and open(exported[0], "rb").read().startswith(b"\xff\xd8"), exported
+        again = backend.call("export.prepare", {"ids": [two]})["paths"]
+        assert again == exported
+        expect_error(backend, "export.prepare", {"ids": ["nope"]}, "id")
+        print("ok: drag-out export")
+
+        # Local files for the staging page.
+        photo(f"{root}/stage/new.jpg", "brand new")
+        photo(f"{root}/stage/sub/old.jpg", "two")
+        photo(f"{root}/stage/.hidden/skip.jpg", "hidden")
+        with open(f"{root}/stage/notes.txt", "w") as f:
+            f.write("x")
+        listed = backend.call("local.list", {"paths": [f"file://{root}/stage"]})
+        names = sorted(i["name"] for i in listed["items"])
+        assert names == ["new.jpg", "old.jpg"] and not listed["truncated"], listed
+        checked = {os.path.basename(c["path"]): c["state"] for c in backend.call("local.check", {"paths": [i["path"] for i in listed["items"]]})}
+        assert checked == {"new.jpg": "new", "old.jpg": "inImmich"}, checked
+        print("ok: staging list and duplicate check")
+
+        # Diagnostics leave out everything private.
+        bundle = backend.call("diagnostics.export", {"directory": f"{root}/diag"})["directory"]
+        files = sorted(os.listdir(bundle))
+        assert files == ["config.redacted.json", "failed.redacted.json", "privacy-note.txt", "status.redacted.json", "summary.txt"], files
+        text = "".join(open(os.path.join(bundle, f)).read() for f in files)
+        for secret in (KEY, f"127.0.0.1:{port}", root):
+            assert secret not in text, f"diagnostics leak {secret}"
+        print("ok: diagnostics")
 
         expect_error(backend, "no.such.method", {}, "unknown method")
         print("all library checks passed")

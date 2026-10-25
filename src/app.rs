@@ -54,7 +54,12 @@ impl App {
             loop {
                 let cap = pruner.settings.read().unwrap().cache_cap_mb * 1024 * 1024;
                 let media = pruner.media.clone();
-                let _ = tokio::task::spawn_blocking(move || media.prune(cap)).await;
+                let cache = pruner.paths.cache_dir.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    media.prune(cap);
+                    crate::local::prune_exports(&cache);
+                })
+                .await;
                 tokio::time::sleep(std::time::Duration::from_secs(900)).await;
             }
         });

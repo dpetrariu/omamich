@@ -9,6 +9,8 @@
 # Omarchy, enables it and restarts the shell. Running it again updates.
 #
 # Options: --no-restart  leave the shell running (restart it yourself later)
+#          --build       compile the backend here instead of downloading it
+#          --prebuilt    download the backend even when run from a checkout
 # Environment: OMAMICH_DIR  where the code lives (default ~/.local/share/omamich-plugin)
 #              OMAMICH_REPO the git repository to clone
 set -euo pipefail
@@ -16,11 +18,14 @@ set -euo pipefail
 repo="${OMAMICH_REPO:-https://github.com/dpetrariu/omamich.git}"
 dir="${OMAMICH_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/omamich-plugin}"
 restart=true
+mode=auto
 
 for arg in "$@"; do
   case "$arg" in
     --no-restart) restart=false ;;
-    -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null || true; exit 0 ;;
+    --build) mode=build ;;
+    --prebuilt) mode=prebuilt ;;
+    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null || true; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -40,27 +45,31 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
   fi
 fi
 
-# Build tools: a C compiler (SQLite is built in), git, make.
-missing=()
-command -v git >/dev/null || missing+=(git)
-command -v make >/dev/null || missing+=(make)
-command -v cc >/dev/null || missing+=(base-devel)
-if (( ${#missing[@]} )); then
-  say "Installing build tools: ${missing[*]} (asks for your password)"
-  sudo pacman -S --needed --noconfirm "${missing[@]}"
-fi
+ensure_build_tools() {
+  # A C compiler (SQLite is built in), make, and Rust.
+  local missing=()
+  command -v make >/dev/null || missing+=(make)
+  command -v cc >/dev/null || missing+=(base-devel)
+  if (( ${#missing[@]} )); then
+    say "Installing build tools: ${missing[*]} (asks for your password)"
+    sudo pacman -S --needed --noconfirm "${missing[@]}"
+  fi
+  if command -v cargo >/dev/null; then
+    cargo=(cargo)
+  elif command -v mise >/dev/null; then
+    say "Installing Rust with mise"
+    mise install rust@latest >/dev/null 2>&1
+    cargo=(mise exec rust@latest -- cargo)
+  else
+    say "Installing Rust (asks for your password)"
+    sudo pacman -S --needed --noconfirm rust
+    cargo=(cargo)
+  fi
+}
 
-# Rust: whatever cargo is on PATH, else mise (Omarchy ships it), else pacman.
-if command -v cargo >/dev/null; then
-  cargo=(cargo)
-elif command -v mise >/dev/null; then
-  say "Installing Rust with mise"
-  mise install rust@latest >/dev/null 2>&1
-  cargo=(mise exec rust@latest -- cargo)
-else
-  say "Installing Rust (asks for your password)"
-  sudo pacman -S --needed --noconfirm rust
-  cargo=(cargo)
+if ! command -v git >/dev/null; then
+  say "Installing git (asks for your password)"
+  sudo pacman -S --needed --noconfirm git
 fi
 
 if [[ "$dir" != "$here" ]]; then
@@ -75,8 +84,21 @@ if [[ "$dir" != "$here" ]]; then
   fi
 fi
 
-say "Building the backend (a few minutes the first time)"
-make -C "$dir" --no-print-directory install CARGO="${cargo[*]}" >/dev/null
+# A checkout someone is working in builds its own backend; an install
+# downloads the release built for its version, and builds only if that fails.
+[[ "$mode" == auto ]] && mode=$([[ "$dir" == "$here" ]] && echo build || echo prebuilt)
+if [[ "$mode" == prebuilt ]]; then
+  say "Downloading the backend"
+  if ! "$dir/scripts/fetch-backend.sh"; then
+    say "No download available; building it here instead"
+    mode=build
+  fi
+fi
+if [[ "$mode" == build ]]; then
+  ensure_build_tools
+  say "Building the backend (a few minutes the first time)"
+  make -C "$dir" --no-print-directory install CARGO="${cargo[*]}" >/dev/null
+fi
 
 say "Linking the plugin into Omarchy"
 "$dir/scripts/link-plugin.sh"

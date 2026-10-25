@@ -1,0 +1,32 @@
+name: CI
+
+# Every push and pull request: unit tests, the sync and library end-to-end
+# tests against the mock Immich, and the UI logic tests. The off-screen UI
+# test needs an Omarchy shell and runs locally (make test-ui).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        run: cargo test --locked
+      - name: Build
+        run: cargo build --locked
+      - name: Sync end-to-end
+        run: python3 -I tests/sync_e2e.py target/debug/omamich
+      - name: Library end-to-end
+        run: python3 tests/library_e2e.py target/debug/omamich
+      - name: UI logic
+        run: node tests/ui_logic.js
+      - name: Shell scripts parse
+        run: for f in install.sh scripts/*.sh; do bash -n "$f"; done

@@ -26,22 +26,91 @@ Item {
 
   // ---------------------------------------------------------------- backend
 
-  property bool binaryChecked: false
-  property bool binaryPresent: false
+  // The backend binary must match this plugin's version. A plugin installed
+  // with `omarchy plugin add` or updated with `omarchy plugin update` has no
+  // matching binary yet, so the release built for this version is downloaded
+  // and checked. A development checkout (one with a target/ folder) builds its
+  // own and is never overwritten.
+  readonly property bool developmentBinary: Quickshell.env("OMAMICH_BIN") !== ""
+  property string backendState: "checking"   // checking | downloading | ready | failed | outdated
+  property string backendMessage: ""
+  property string binaryVersion: ""
+  property bool devCheckout: false
+  readonly property bool binaryChecked: backendState !== "checking"
+  readonly property bool binaryPresent: backendState === "ready"
+
+  function checkBinary() {
+    backendState = "checking"
+    binaryVersion = ""
+    versionProbe.running = true
+  }
+
+  function fetchBinary() {
+    backendState = "downloading"
+    backendMessage = ""
+    fetcher.running = true
+  }
+
   Process {
-    id: probe
-    command: ["test", "-x", root.executable]
-    running: true
+    id: checkoutProbe
+    command: ["test", "-d", root.pluginDir + "/target"]
     onExited: function(code) {
-      root.binaryPresent = code === 0
-      root.binaryChecked = true
+      root.devCheckout = code === 0
+      root.checkBinary()
+    }
+  }
+
+  Process {
+    id: versionProbe
+    command: [root.executable, "version"]
+    stdout: SplitParser {
+      onRead: data => {
+        var m = /^omamich (\S+) /.exec(String(data))
+        if (m) root.binaryVersion = m[1]
+      }
+    }
+    onExited: function(code) {
+      if (root.developmentBinary) {
+        root.backendState = code === 0 ? "ready" : "failed"
+        root.backendMessage = code === 0 ? "" : "OMAMICH_BIN does not run: " + root.executable
+        return
+      }
+      if (code === 0 && root.binaryVersion === root.version) {
+        root.backendState = "ready"
+        return
+      }
+      if (root.devCheckout) {
+        // A developer's own build: say so, never replace it.
+        root.backendState = code === 0 ? "outdated" : "failed"
+        root.backendMessage = code === 0
+          ? "This checkout's backend is " + root.binaryVersion + " but the plugin is " + root.version + "; run make install"
+          : "Build the backend once: make install"
+        return
+      }
+      root.fetchBinary()
+    }
+  }
+
+  Process {
+    id: fetcher
+    command: [root.pluginDir + "/scripts/fetch-backend.sh", root.version]
+    stderr: SplitParser {
+      onRead: data => root.backendMessage = String(data)
+    }
+    onExited: function(code) {
+      if (code === 0) {
+        root.checkBinary()
+        return
+      }
+      root.backendState = "failed"
+      if (!root.backendMessage) root.backendMessage = "Downloading the backend failed (" + code + ")"
     }
   }
 
   readonly property alias backend: rustBackend
   Backend {
     id: rustBackend
-    executable: root.binaryPresent ? root.executable : ""
+    executable: root.backendState === "ready" || root.backendState === "outdated" ? root.executable : ""
     onNotification: function(method, params) {
       if (method === "sync.changed") root.applySyncStatus(params)
       else if (method === "server.changed") root.refreshServer()
@@ -57,6 +126,7 @@ Item {
   onReadyChanged: if (ready) {
     loadSettings()
     refreshServer()
+    refreshSync()
   }
 
   // ---------------------------------------------------------------- settings
@@ -319,6 +389,7 @@ Item {
     if (shell && typeof shell.summon === "function") shell.summon("omamich", JSON.stringify(payload || {}))
   }
 
-  Component.onCompleted: refreshSync()
+  // After the shell has handed over the manifest, which carries the version.
+  Component.onCompleted: Qt.callLater(function() { checkoutProbe.running = true })
   Component.onDestruction: rustBackend.shutdown()
 }

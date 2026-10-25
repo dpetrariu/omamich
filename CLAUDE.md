@@ -53,6 +53,11 @@ Rust comes from mise: prefix cargo with `mise exec rust@latest cmake@latest --` 
 - Actions that open another surface end in `...`. Labels say their real scope. Destructive actions use the urgent colour and confirm; reversible ones offer Undo.
 - Untrusted text (server data, file names) renders as `Text.PlainText`. Ids are validated as UUIDs before reaching a URL; the API key never reaches QML.
 
+## Releases and the backend binary
+
+- The plugin runs `bin/omamich` and requires its `omamich version` to equal `manifest.json`'s version. If it does not (fresh `omarchy plugin add`, or after `omarchy plugin update`), `Service.qml` runs `scripts/fetch-backend.sh`, which downloads `omamich-<version>-linux-<arch>.tar.gz` from the `v<version>` release, checks it against `SHA256SUMS` and that the binary reports the version, then swaps it in. A checkout with `target/` is a development copy and is never overwritten.
+- Cut a release with `scripts/release.sh X.Y.Z` from a clean, pushed `main`. `.github/workflows/release.yml` refuses a tag that disagrees with `Cargo.toml` or `manifest.json`, runs the unit tests, builds on `ubuntu-22.04` and `ubuntu-22.04-arm` (old glibc so the binaries run on any current Arch), and publishes. `ci.yml` runs on every push.
+
 ## How a feature is added
 
 1. Backend method in `src/` with input validation, registered in `methods.rs`; unit tests for pure logic.

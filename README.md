@@ -17,22 +17,46 @@ Your [Immich](https://immich.app) photo library in a native Omarchy window, plus
 
 ## Install
 
-Requirements: Omarchy 4 (the Quickshell shell), Rust, and a C toolchain (`base-devel`). With mise: `mise install rust@latest`.
+You need [Omarchy](https://omarchy.org) 4 or later (Omamich is a plugin for its Quickshell-based shell) and an [Immich](https://immich.app) server. Omamich is built from source on your computer, so it runs on x86_64 and ARM alike; the installer fetches what it needs to build (a C compiler, and Rust through mise).
 
 ```bash
-git clone <this repo> ~/Projects/omamich
-cd ~/Projects/omamich
-make link          # builds bin/omamich, links the plugin, enables it
-omarchy restart shell
+curl -fsSL https://raw.githubusercontent.com/dpetrariu/omamich/main/install.sh | bash
 ```
 
-Click the photos icon in the bar. On first open, give Omamich your server address and an API key (Immich → profile picture → Account Settings → API Keys → New API Key), or press **Use Mimick's** to take over Mimick's server and key. The key is kept in your keyring.
+It downloads Omamich into `~/.local/share/omamich-plugin`, builds the backend (a few minutes the first time), adds the plugin to Omarchy with its bar icon and an "Upload to Immich" entry for your file manager, and restarts the shell. It may ask for your password to install build tools with pacman.
 
-Open the window from the keyboard by adding to `~/.config/hypr/bindings.lua`:
+Prefer to look first? Clone it and run the same script from the checkout, which then installs from that folder:
+
+```bash
+git clone https://github.com/dpetrariu/omamich.git
+cd omamich
+./install.sh
+```
+
+### First start
+
+Click the photos icon in the bar. Enter your Immich address (for example `http://192.168.1.10:2283` or `https://photos.example.com`) and an API key: in Immich, click your profile picture → **Account Settings** → **API Keys** → **New API Key**. If [Mimick](https://github.com/nicx17/mimick) is set up on the computer, **Use Mimick's** takes over its server and key in one click. The key is stored in your keyring.
+
+To open Omamich from the keyboard, add a binding to `~/.config/hypr/bindings.lua`:
 
 ```lua
 o.bind("SUPER + SHIFT + I", "Omamich", "omarchy shell shell toggle omamich '{}'")
 ```
+
+Folder sync starts switched off; turn it on and add folders under **Folder sync**.
+
+### Update
+
+Run the installer again (the `curl` line, or `./install.sh` in your checkout). It pulls the latest code, rebuilds and restarts the shell.
+
+### Uninstall
+
+```bash
+~/.local/share/omamich-plugin/scripts/uninstall.sh          # keeps your settings
+~/.local/share/omamich-plugin/scripts/uninstall.sh --purge  # also removes settings, cache and the saved key
+```
+
+Use the path of your checkout if you installed from one. Nothing in your Immich library is touched either way.
 
 ### API key permissions
 
@@ -45,6 +69,8 @@ Press `?` in the window for the full sheet. The essentials: `h j k l` move, `ent
 Scripts and keybindings can move around (never change anything) over IPC: `omarchy-shell shell call omamich navigate next`, `… navigate go:people`, `… navigate search:sunset`.
 
 ## Development
+
+Work from a checkout installed with `./install.sh`; the plugin is a link to it, so edits are live after `omarchy restart shell`.
 
 ```bash
 make test        # Rust unit tests; sync, library and off-screen UI end-to-end tests against a mock Immich; UI logic tests

@@ -22,7 +22,7 @@ Omamich is an Immich client built as an Omarchy shell plugin, following the stru
 ```bash
 make test                       # everything: Rust, sync/library/UI end-to-end, UI logic
 make install                    # rebuild bin/omamich (the plugin runs this binary)
-make link                       # first time: symlink into ~/.config/omarchy/plugins and enable
+./install.sh                    # first time (and to update): build, link into Omarchy, enable, restart the shell
 omarchy restart shell           # the shell caches QML; restart after UI edits
 OMAMICH_UI_SHOTS=/tmp/shots python3 tests/ui_e2e.py target/debug/omamich   # keep screenshots
 ```

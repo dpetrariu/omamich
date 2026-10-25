@@ -36,7 +36,7 @@ Rectangle {
       readOnly: true
       selectByMouse: true
       wrapMode: Text.Wrap
-      text: root.missing ? "Build it once from the plugin folder:\n\ncd " + root.service.pluginDir + " && make install\n\nThen reopen this window."
+      text: root.missing ? "Build it once by running the installer in the plugin folder:\n\n" + root.service.pluginDir + "/install.sh\n\nThen reopen this window."
         : root.failure
       color: root.theme.dim
       font.family: root.theme.font

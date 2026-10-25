@@ -22,7 +22,7 @@ Item {
   // Pressed and moved: the person wants to drag the photo out as a file.
   signal dragRequested()
 
-  readonly property bool hovered: mouse.containsMouse
+  readonly property bool hovered: tileMouse.containsMouse
   readonly property string placeholderColor: Thumbhash.averageColor(asset ? asset.thumbhash : "")
 
   Rectangle {
@@ -206,7 +206,7 @@ Item {
   }
 
   MouseArea {
-    id: mouse
+    id: tileMouse
     anchors.fill: parent
     hoverEnabled: true
     acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -225,7 +225,7 @@ Item {
         root.dragRequested()
       }
     }
-    onReleased: Qt.callLater(function() { mouse.dragging = false })
+    onReleased: Qt.callLater(function() { tileMouse.dragging = false })
     onClicked: function(mouse) {
       if (dragging) return
       if (mouse.button === Qt.RightButton) root.rightClicked(mouse.x, mouse.y)

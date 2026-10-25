@@ -120,6 +120,10 @@ Item {
       root.total = sum
       root.buckets = list
       root.rebuild()
+      if (root.pendingReveal) {
+        var wanted = root.pendingRevealTaken
+        root.revealAsset(root.pendingReveal, wanted)
+      }
       if (root.cursor === null && list.length > 0) root.cursor = { bucket: list[0].key, index: 0 }
     })
   }
@@ -204,6 +208,7 @@ Item {
       root.assetsOf = map
       root.layoutBucket(key)
       root.replaceBucketRows(key)
+      if (root.pendingReveal) Qt.callLater(root.finishReveal)
       if (root.pendingMove && root.pendingMove.bucket === key) {
         var move = root.pendingMove
         root.pendingMove = null
@@ -302,6 +307,39 @@ Item {
   // ------------------------------------------------------------- cursor & selection
 
   property var pendingMove: null
+  // A photo to bring into view once its month has loaded (after a restore).
+  property string pendingReveal: ""
+  property string pendingRevealTaken: ""
+
+  // Scroll to a photo by id, loading its month first. `taken` is its date,
+  // which names the month it lives in.
+  function revealAsset(id, taken) {
+    var key = String(taken || "").slice(0, 7) + "-01"
+    pendingReveal = id
+    pendingRevealTaken = String(taken || "")
+    if (buckets.length === 0) return       // the index is still loading; done then
+    if (bucketIndex(key) < 0) key = buckets[0].key
+    if (assetsOf[key]) finishReveal()
+    else {
+      scrollToBucket(key)
+      ensureLoaded(key)
+    }
+  }
+
+  function finishReveal() {
+    if (!pendingReveal) return
+    for (var key in assetsOf) {
+      var list = assetsOf[key]
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === pendingReveal) {
+          pendingReveal = ""
+          cursor = { bucket: key, index: i }
+          reveal()
+          return
+        }
+      }
+    }
+  }
 
   function bucketIndex(key) {
     for (var i = 0; i < buckets.length; i++) if (buckets[i].key === key) return i

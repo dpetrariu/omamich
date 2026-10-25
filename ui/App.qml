@@ -556,9 +556,26 @@ Item {
   function restore(assets, grid) {
     service.call("asset.restore", { ids: ids(assets) }, function(r, e) {
       if (e) return root.failed(e)
-      toast.show("Restored " + Format.count(assets.length, "photo"))
+      // Restored photos go back to the date they were taken, which can be
+      // far down the timeline: offer to go there.
+      var first = assets[0]
+      toast.show("Restored " + Format.count(assets.length, "photo") + " to the timeline", {
+        actionText: "Show",
+        action: function() { root.showInTimeline(first) }
+      })
       root.afterChange(grid, assets, {}, true)
     })
+  }
+
+  function showInTimeline(asset) {
+    go("photos")
+    var tries = 0
+    var attempt = function() {
+      var grid = root.activeGrid()
+      if (grid && typeof grid.revealAsset === "function") grid.revealAsset(asset.id, asset.fileCreatedAt)
+      else if (++tries < 20) Qt.callLater(attempt)
+    }
+    Qt.callLater(attempt)
   }
 
   function deleteForever(assets, grid) {

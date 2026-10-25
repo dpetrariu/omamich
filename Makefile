@@ -2,7 +2,7 @@
 CARGO ?= cargo
 BIN := bin/omamich
 
-.PHONY: build install link test test-rust test-sync test-library test-ui lint clean
+.PHONY: build install link test test-rust test-sync test-library test-ui test-fetch lint clean
 
 build:
 	$(CARGO) build --release --locked
@@ -16,7 +16,7 @@ install: build
 link: install
 	./scripts/link-plugin.sh
 
-test: test-rust test-sync test-library test-ui lint
+test: test-rust test-sync test-library test-ui test-fetch lint
 
 test-rust:
 	$(CARGO) test --locked
@@ -41,3 +41,8 @@ test-library:
 test-ui:
 	$(CARGO) build --locked
 	python3 tests/ui_e2e.py target/debug/omamich
+
+# A plugin without a backend downloads and verifies one from a local stand-in release.
+test-fetch:
+	$(CARGO) build --locked
+	python3 tests/fetch_e2e.py target/debug/omamich

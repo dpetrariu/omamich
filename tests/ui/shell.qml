@@ -25,7 +25,7 @@ ShellRoot {
     source: "file://" + root.ui + "/Service.qml"
     onLoaded: {
       item.shell = shellApi
-      item.manifest = { id: "omamich", version: "test" }
+      item.manifest = { id: "omamich", version: Quickshell.env("OMAMICH_VERSION") || "test" }
     }
   }
 

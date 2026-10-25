@@ -31,7 +31,7 @@ Item {
   // matching binary yet, so the release built for this version is downloaded
   // and checked. A development checkout (one with a target/ folder) builds its
   // own and is never overwritten.
-  readonly property bool developmentBinary: Quickshell.env("OMAMICH_BIN") !== ""
+  readonly property bool developmentBinary: !!Quickshell.env("OMAMICH_BIN")
   property string backendState: "checking"   // checking | downloading | ready | failed | outdated
   property string backendMessage: ""
   property string binaryVersion: ""
@@ -42,7 +42,9 @@ Item {
   function checkBinary() {
     backendState = "checking"
     binaryVersion = ""
-    versionProbe.running = true
+    // A Process whose program does not exist never reports an exit, so ask
+    // whether the file is there before running it.
+    existsProbe.running = true
   }
 
   function fetchBinary() {
@@ -57,6 +59,24 @@ Item {
     onExited: function(code) {
       root.devCheckout = code === 0
       root.checkBinary()
+    }
+  }
+
+  Process {
+    id: existsProbe
+    command: ["test", "-x", root.executable]
+    onExited: function(code) {
+      if (code === 0) {
+        versionProbe.running = true
+      } else if (root.developmentBinary) {
+        root.backendState = "failed"
+        root.backendMessage = "OMAMICH_BIN does not exist: " + root.executable
+      } else if (root.devCheckout) {
+        root.backendState = "failed"
+        root.backendMessage = "Build the backend once: make install"
+      } else {
+        root.fetchBinary()
+      }
     }
   }
 

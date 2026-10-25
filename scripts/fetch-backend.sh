@@ -20,13 +20,15 @@ case "$(uname -m)" in
 esac
 
 asset="omamich-$version-linux-$arch.tar.gz"
-base="https://github.com/$repo/releases/download/v$version"
+# OMAMICH_RELEASES_URL points at a mirror (or a test server) laid out like
+# GitHub's: <url>/v<version>/<asset>.
+base="${OMAMICH_RELEASES_URL:-https://github.com/$repo/releases/download}/v$version"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-if ! { curl -fsSL --retry 2 -o "$tmp/$asset" "$base/$asset" && curl -fsSL --retry 2 -o "$tmp/SHA256SUMS" "$base/SHA256SUMS"; }; then
+if ! { curl -fsL --retry 2 -o "$tmp/$asset" "$base/$asset" 2>/dev/null && curl -fsL --retry 2 -o "$tmp/SHA256SUMS" "$base/SHA256SUMS" 2>/dev/null; }; then
   # A private repository needs a signed-in GitHub CLI.
-  if command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
+  if [[ -z "${OMAMICH_RELEASES_URL:-}" ]] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
       && gh release download "v$version" -R "$repo" -p "$asset" -p SHA256SUMS -D "$tmp" --clobber >/dev/null 2>&1; then
     :
   else

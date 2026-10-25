@@ -37,6 +37,8 @@ Item {
   readonly property bool listMode: typeof pager === "function"
   readonly property real targetHeight: Math.round(theme.space(200) * zoom)
   readonly property real gap: theme.space(3)
+  property alias wheel: wheel
+  property alias scrollView: list
   readonly property real headerHeight: theme.space(44)
   readonly property real dayHeight: theme.space(30)
   readonly property real contentWidth: Math.max(100, list.width - (showScrubber ? scrubber.width : 0) - theme.space(12))
@@ -465,6 +467,7 @@ Item {
 
   // Scroll just enough to show the cursor's row.
   function reveal() {
+    wheel.stop()
     if (!cursor) return
     for (var i = 0; i < rows.count; i++) {
       var r = rows.get(i)
@@ -622,6 +625,7 @@ Item {
   }
 
   function scrollToBucket(key) {
+    wheel.stop()
     for (var i = 0; i < rows.count; i++) {
       if (rows.get(i).bucket === key) {
         list.positionViewAtIndex(i, ListView.Beginning)
@@ -633,6 +637,13 @@ Item {
   // ------------------------------------------------------------- view
 
   ListModel { id: rows }
+
+  // Momentum scrolling with rubber-band ends; one notch glides about a row.
+  WheelScroller {
+    id: wheel
+    flickable: list
+    notch: root.targetHeight * 1.6
+  }
 
   ListView {
     id: list

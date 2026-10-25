@@ -31,7 +31,17 @@ GridView {
   cacheBuffer: 600
   QQC.ScrollBar.vertical: QQC.ScrollBar { policy: QQC.ScrollBar.AsNeeded }
 
+  // Momentum scrolling with rubber-band ends. A child of the view itself,
+  // not of its content, so it stays put while the tiles scroll.
+  WheelScroller {
+    id: wheel
+    parent: root
+    flickable: root
+    notch: root.cellHeight
+  }
+
   function moveBy(step) {
+    wheel.stop()
     var n = count
     if (n === 0) return
     cursor = Math.max(0, Math.min(n - 1, cursor + step))
@@ -46,8 +56,8 @@ GridView {
     case "down": moveBy(perRow); return true
     case "pageDown": moveBy(perRow * Math.max(1, Math.floor(height / cellHeight))); return true
     case "pageUp": moveBy(-perRow * Math.max(1, Math.floor(height / cellHeight))); return true
-    case "first": cursor = 0; positionViewAtBeginning(); return true
-    case "last": cursor = Math.max(0, count - 1); positionViewAtEnd(); return true
+    case "first": wheel.stop(); cursor = 0; positionViewAtBeginning(); return true
+    case "last": wheel.stop(); cursor = Math.max(0, count - 1); positionViewAtEnd(); return true
     case "open":
       if (count > 0 && model) root.activated(model[cursor] || null, cursor)
       return true

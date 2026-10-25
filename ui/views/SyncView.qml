@@ -41,7 +41,11 @@ Item {
     service.call("sync.failed", {}, function(r, e) { if (!root) return; if (!e) root.failedFiles = r })
   }
 
+  // Momentum scrolling with rubber-band ends.
+  WheelScroller { flickable: scrollPage; notch: root.theme.space(260) }
+
   Flickable {
+    id: scrollPage
     anchors.fill: parent
     contentHeight: column.implicitHeight + root.theme.space(48)
     clip: true

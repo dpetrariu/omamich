@@ -68,7 +68,11 @@ Item {
     return r.ok ? "Works — Immich " + r.version + " as " + (r.user.name || r.user.email) : r.error
   }
 
+  // Momentum scrolling with rubber-band ends.
+  WheelScroller { flickable: scrollPage; notch: root.theme.space(260) }
+
   Flickable {
+    id: scrollPage
     anchors.fill: parent
     contentHeight: column.implicitHeight + root.theme.space(48)
     clip: true

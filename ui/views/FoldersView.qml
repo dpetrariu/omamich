@@ -81,6 +81,8 @@ Item {
     onBack: root.up()
   }
 
+  WheelScroller { flickable: tree; notch: root.theme.space(220) }
+
   ListView {
     id: tree
     anchors { left: parent.left; top: header.bottom; bottom: parent.bottom; leftMargin: root.theme.space(12) }

@@ -136,6 +136,35 @@ def main():
         wait_for("partner photos appear", lambda: h.value("app.activeGrid().total") == 44, 15)
         print("ok: timeline, months and partner photos")
 
+        # Momentum scrolling: a wheel notch glides a good step and settles; a
+        # flick into the top stretches past it and springs back; a key catches
+        # a glide.
+        w = "app.activeGrid().wheel"
+        lv = "app.activeGrid().scrollView"
+        h.js(f"{w}.scrollBy(-1000000)")
+        time.sleep(0.4)
+        top = h.value(f"{lv}.originY - {lv}.topMargin")
+        bottom = h.value(f"{lv}.originY + {lv}.contentHeight + {lv}.bottomMargin - {lv}.height")
+        assert bottom - top > 300, ("the timeline is too short to scroll", top, bottom)
+        notch = h.value(w + ".notch")
+        h.js(f"{w}.handle(0, -120, 0, 0, false, 200, 0)")
+        time.sleep(1.6)
+        moved = h.value(lv + ".contentY") - top
+        assert abs(moved - min(notch, bottom - top)) < notch * 0.03 + 2 and h.value(w + ".active") is False, (moved, notch)
+        h.js(f"{w}.scrollBy(-1000000)")
+        h.js(f"{w}.scrollBy({min(600, bottom - top)})")
+        time.sleep(0.3)
+        h.js(f"({w}.handle(0, 0, 0, 0, false, 200, 1, 1000), " + ", ".join(f"{w}.handle(0, 0, 0, 60, false, 200, 2, {1000 + 16 * (i + 1)})" for i in range(6)) + f", {w}.handle(0, 0, 0, 0, false, 200, 3, 1100))")
+        time.sleep(2.0)
+        assert h.value(w + ".peakStretch") > 10, h.value(w + ".peakStretch")
+        assert abs(h.value(lv + ".contentY") - top) < 0.5 and h.value(w + ".active") is False, "the bounce did not settle on the top"
+        h.js(f"({w}.handle(0, 0, 0, 0, false, 200, 1, 5000), " + ", ".join(f"{w}.handle(0, 0, 0, -40, false, 200, 2, {5000 + 16 * (i + 1)})" for i in range(6)) + f", {w}.handle(0, 0, 0, 0, false, 200, 3, 5100))")
+        time.sleep(0.1)
+        h.nav("down")
+        assert h.value(w + ".active") is False, "a key did not stop the glide"
+        h.nav("first")
+        print("ok: momentum scrolling and rubber-band ends")
+
         # Keyboard movement and the viewer.
         first = h.value("app.activeGrid().currentAsset().id")
         h.nav("right")

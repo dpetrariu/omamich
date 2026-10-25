@@ -64,7 +64,28 @@ Item {
   readonly property var topPlaces: service.places.slice(0, 16)
   readonly property var suggestions: ["Sunset", "Beach", "Snow", "Mountains", "Food", "Dog", "Cat", "Birthday cake", "City at night", "Forest", "Car", "Flowers"]
 
+  // Momentum scrolling; a sideways swipe or Shift+wheel scrolls the row of
+  // people, places or tags under the pointer.
+  WheelScroller {
+    flickable: page
+    notch: root.theme.space(320)
+    sideways: function(dx, y) {
+      for (var i = 0; i < column.children.length; i++) {
+        var row = column.children[i]
+        if (row.orientation !== ListView.Horizontal || !row.visible) continue
+        var p = row.mapToItem(root, 0, 0)
+        if (y < p.y || y >= p.y + row.height) continue
+        row.cancelFlick()
+        var start = row.originX - row.leftMargin
+        var end = Math.max(start, row.originX + row.contentWidth + row.rightMargin - row.width)
+        row.contentX = Math.max(start, Math.min(end, row.contentX + dx))
+        return
+      }
+    }
+  }
+
   Flickable {
+    id: page
     anchors.fill: parent
     contentHeight: column.implicitHeight + root.theme.space(40)
     clip: true

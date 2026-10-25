@@ -60,6 +60,7 @@ Item {
     else if (id === "first") cursor = 0
     else if (id === "last") cursor = rows.length - 1
     else if (id === "open" && row) root.tagOpened(row.tag)
+    tagWheel.stop()
     list.positionViewAtIndex(cursor, ListView.Contain)
   }
 
@@ -122,6 +123,8 @@ Item {
     font.pixelSize: root.theme.body
     onTextChanged: root.cursor = 0
   }
+
+  WheelScroller { id: tagWheel; flickable: list; notch: root.theme.space(220) }
 
   ListView {
     id: list

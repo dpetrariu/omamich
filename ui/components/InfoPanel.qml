@@ -115,7 +115,11 @@ Item {
     }
   }
 
+  // Momentum scrolling with rubber-band ends.
+  WheelScroller { flickable: scrollPage; notch: root.theme.space(260) }
+
   Flickable {
+    id: scrollPage
     anchors { left: parent.left; right: parent.right; top: top.bottom; bottom: parent.bottom }
     contentHeight: column.implicitHeight + root.theme.space(30)
     clip: true

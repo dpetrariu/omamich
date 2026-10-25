@@ -156,7 +156,8 @@ def main():
         assert again["paths"][0].endswith("two (1).jpg"), again
         backend.call("asset.trash", {"ids": [one]})
         assert state(port)["assets"][one]["trashed"]
-        backend.call("asset.restore", {"ids": [one]})
+        restored = backend.call("asset.restore", {"ids": [one]})
+        assert restored["restored"] == [one] and restored["notRestored"] == [], restored
         assert not state(port)["assets"][one]["trashed"]
         backend.call("asset.deleteForever", {"ids": [one]})
         assert one not in state(port)["assets"]

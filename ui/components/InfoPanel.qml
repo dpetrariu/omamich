@@ -214,6 +214,14 @@ Item {
 
       InfoRow {
         theme: root.theme
+        icon: "warning"
+        visible: !!root.details && root.details.isOffline === true
+        title: "Offline"
+        detail: "Immich cannot find this file in its external library any more. Put it back and rescan the library in Immich; until then it stays in the trash and cannot be restored."
+      }
+
+      InfoRow {
+        theme: root.theme
         icon: "calendar"
         visible: !!root.details
         title: root.details ? Format.dateLabel(root.details.localDateTime || root.details.fileCreatedAt) : ""

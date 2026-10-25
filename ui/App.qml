@@ -543,27 +543,41 @@ Item {
       Qt.callLater(function() { root.afterChange(grid, assets, {}, true) })
       toast.show("Moved " + Format.count(assets.length, "photo") + " to the trash", {
         actionText: "Undo",
-        action: function() {
-          root.service.call("asset.restore", { ids: root.ids(assets) }, function(r2, e2) {
-            if (e2) return root.failed(e2)
-            root.refreshContent()
-          })
-        }
+        action: function() { root.restore(assets, null, function() { root.refreshContent() }) }
       })
     })
   }
 
-  function restore(assets, grid) {
+  // Why Immich kept photos in the trash, in words a person can act on.
+  function keptInTrash(kept, offline) {
+    if (kept === 0) return ""
+    var what = Format.count(kept, "photo")
+    if (offline >= kept)
+      return "Immich kept " + what + " in the trash: " + (kept === 1 ? "its file is" : "their files are")
+        + " missing from your external library (offline). Put " + (kept === 1 ? "the file" : "the files")
+        + " back and rescan the library in Immich to bring " + (kept === 1 ? "it" : "them") + " back."
+    return "Immich kept " + what + " in the trash" + (offline > 0 ? "; " + offline + " of them are offline (their files are missing)" : "") + "."
+  }
+
+  // Restore, then trust only what Immich actually restored.
+  function restore(assets, grid, after) {
     service.call("asset.restore", { ids: ids(assets) }, function(r, e) {
       if (e) return root.failed(e)
+      var done = assets.filter(function(a) { return r.restored.indexOf(a.id) >= 0 })
+      var kept = r.notRestored.length
+      if (done.length > 0) root.afterChange(grid, done, {}, true)
+      if (typeof after === "function") after(done)
+      if (kept > 0) {
+        toast.show((done.length > 0 ? "Restored " + Format.count(done.length, "photo") + ". " : "") + root.keptInTrash(kept, r.offline.length), { tone: "error", duration: 12000 })
+        return
+      }
       // Restored photos go back to the date they were taken, which can be
       // far down the timeline: offer to go there.
-      var first = assets[0]
-      toast.show("Restored " + Format.count(assets.length, "photo") + " to the timeline", {
+      var first = done[0]
+      toast.show("Restored " + Format.count(done.length, "photo") + " to the timeline", {
         actionText: "Show",
         action: function() { root.showInTimeline(first) }
       })
-      root.afterChange(grid, assets, {}, true)
     })
   }
 
@@ -1415,7 +1429,9 @@ Item {
           root.service.call("trash.restoreAll", {}, function(r, e) {
             if (e) return root.failed(e)
             root.refreshContent()
-            toast.show("Restored everything in the trash")
+            var count = r.count === null || r.count === undefined ? "everything" : Format.count(r.count, "photo")
+            if (r.left > 0) toast.show("Restored " + count + ". " + root.keptInTrash(r.left, r.left), { tone: "error", duration: 12000 })
+            else toast.show("Restored " + count + " from the trash")
           })
         } else if (id === "empty") {
           confirmDialog.ask({

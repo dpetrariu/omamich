@@ -22,7 +22,9 @@ Item {
   // Pressed and moved: the person wants to drag the photo out as a file.
   signal dragRequested()
 
-  readonly property bool hovered: tileMouse.containsMouse
+  // Hovering the selection circle hands the hover to its own MouseArea; it
+  // must still count, or the circle hides itself and blinks.
+  readonly property bool hovered: tileMouse.containsMouse || checkMouse.containsMouse
   readonly property string placeholderColor: Thumbhash.averageColor(asset ? asset.thumbhash : "")
 
   Rectangle {
@@ -174,6 +176,7 @@ Item {
   // The selection check, top left.
   Item {
     id: check
+    objectName: "selectCircle"
     visible: root.selecting || root.hovered || root.selected
     anchors { top: parent.top; left: parent.left; margins: root.theme.space(5) }
     width: root.theme.space(22)

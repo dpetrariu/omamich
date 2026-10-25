@@ -137,10 +137,12 @@ Item {
       readonly property real indent: root.query ? 0 : modelData.depth * root.theme.space(20)
       width: list.width
       height: root.theme.space(36)
+      // On the row itself, so hovering its buttons still counts as the row.
+      HoverHandler { id: rowHover }
       Rectangle {
         anchors.fill: parent
         radius: root.theme.radius
-        color: root.cursor === row.index ? root.theme.selectedFill : (mouse.containsMouse ? root.theme.hoverFill : "transparent")
+        color: root.cursor === row.index ? root.theme.selectedFill : (rowHover.hovered ? root.theme.hoverFill : "transparent")
       }
       MouseArea {
         id: mouse
@@ -196,7 +198,7 @@ Item {
         anchors.right: parent.right
         anchors.rightMargin: root.theme.space(8)
         anchors.verticalCenter: parent.verticalCenter
-        visible: mouse.containsMouse || root.cursor === row.index
+        visible: rowHover.hovered || root.cursor === row.index
         IconButton {
           theme: root.theme
           icon: "plus"

@@ -139,7 +139,7 @@ def asset_view(a):
         "fileCreatedAt": a["fileCreatedAt"], "localDateTime": a["fileCreatedAt"], "width": w, "height": h,
         "duration": a["duration"], "livePhotoVideoId": a["livePhotoVideoId"], "ownerId": a["ownerId"],
         "owner": {"id": a["ownerId"], "name": USERS[a["ownerId"]]["name"]}, "originalPath": a["path"],
-        "originalMimeType": "image/png", "thumbhash": None, "isOffline": False, "isEdited": False,
+        "originalMimeType": "image/png", "thumbhash": None, "isOffline": bool(a.get("offline")), "isEdited": False,
         "exifInfo": {"description": a["description"], "rating": a["rating"], "city": a["city"], "country": a["country"],
                      "state": None, "latitude": a["lat"], "longitude": a["lon"], "make": a["make"], "model": a["model"],
                      "exifImageWidth": w, "exifImageHeight": h, "fileSizeInByte": len(a["data"]),
@@ -231,6 +231,8 @@ def seed():
         ASSETS[ids[k]]["visibility"] = "archive"
     for k in (20, 21, 22):
         ASSETS[ids[k]]["isTrashed"] = True
+    # Its file vanished from the external library: Immich will not restore it.
+    ASSETS[ids[22]]["offline"] = True
     # Ana's photos, shared with me as a partner.
     for i in range(4):
         new_asset(f"ANA_{i}.JPG", png(96, 64, color_of(f"ana{i}")), f"2026-10-0{i + 1}T10:00:00.000Z", ownerId=ANA)
@@ -462,14 +464,22 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     results.append({"id": item["id"], "action": "accept"})
             return self.reply(200, {"results": results})
+        # Like Immich: an offline external-library photo stays in the trash,
+        # though the call itself succeeds.
         if path == "/api/trash/restore/assets":
+            count = 0
             for i in body["ids"]:
-                ASSETS[i]["isTrashed"] = False
-            return self.reply(200, {"count": len(body["ids"])})
+                if not ASSETS[i].get("offline"):
+                    ASSETS[i]["isTrashed"] = False
+                    count += 1
+            return self.reply(200, {"count": count})
         if path == "/api/trash/restore":
+            count = 0
             for a in ASSETS.values():
-                a["isTrashed"] = False
-            return self.reply(200, {"count": 0})
+                if a["isTrashed"] and not a.get("offline"):
+                    a["isTrashed"] = False
+                    count += 1
+            return self.reply(200, {"count": count})
         if path == "/api/trash/empty":
             for k in [k for k, a in ASSETS.items() if a["isTrashed"]]:
                 del ASSETS[k]

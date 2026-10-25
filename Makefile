@@ -2,7 +2,7 @@
 CARGO ?= cargo
 BIN := bin/omamich
 
-.PHONY: build install link test test-rust test-sync test-library test-ui test-fetch lint clean
+.PHONY: build install link test test-rust test-sync test-library test-ui test-fetch test-qml lint clean
 
 build:
 	$(CARGO) build --release --locked
@@ -16,7 +16,7 @@ install: build
 link: install
 	./scripts/link-plugin.sh
 
-test: test-rust test-sync test-library test-ui test-fetch lint
+test: test-rust test-sync test-library test-ui test-fetch test-qml lint
 
 test-rust:
 	$(CARGO) test --locked
@@ -46,3 +46,7 @@ test-ui:
 test-fetch:
 	$(CARGO) build --locked
 	python3 tests/fetch_e2e.py target/debug/omamich
+
+# Components driven with a synthetic mouse (hover, click) under QtTest.
+test-qml:
+	QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml

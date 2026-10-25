@@ -189,14 +189,54 @@ pub async fn asset_trash(app: &App, params: &Value, force: bool) -> Result<Value
     Ok(json!(ids.len()))
 }
 
+/// Take photos out of the trash, then check which really came out. Immich
+/// answers success but keeps an external-library photo whose file is missing
+/// ("offline") in the trash; the window must not claim it was restored.
 pub async fn asset_restore(app: &App, params: &Value) -> Result<Value> {
+    use futures_util::StreamExt;
     let ids = ids_param(params, "ids")?;
-    app.immich.post("/api/trash/restore/assets", json!({ "ids": ids })).await?;
-    Ok(json!(ids.len()))
+    let response = app.immich.post("/api/trash/restore/assets", json!({ "ids": ids })).await?;
+    let reported = response.get("count").and_then(|v| v.as_u64());
+    if ids.len() > 200 {
+        // Too many to look at one by one; go by Immich's count.
+        let all = reported.map(|c| c as usize >= ids.len()).unwrap_or(true);
+        return Ok(json!({ "restored": if all { ids.clone() } else { vec![] }, "notRestored": [], "offline": [], "count": reported }));
+    }
+    let checks: Vec<(String, Option<Value>)> = futures_util::stream::iter(ids.into_iter().map(|id| async move {
+        let asset = app.immich.get(&format!("/api/assets/{id}")).await.ok();
+        (id, asset)
+    }))
+    .buffer_unordered(8)
+    .collect()
+    .await;
+    let mut restored = Vec::new();
+    let mut not_restored = Vec::new();
+    let mut offline = Vec::new();
+    for (id, asset) in checks {
+        let still_trashed = asset.as_ref().and_then(|a| a.get("isTrashed")).and_then(|v| v.as_bool()).unwrap_or(false);
+        if still_trashed {
+            if asset.as_ref().and_then(|a| a.get("isOffline")).and_then(|v| v.as_bool()) == Some(true) {
+                offline.push(id.clone());
+            }
+            not_restored.push(id);
+        } else {
+            restored.push(id);
+        }
+    }
+    Ok(json!({ "restored": restored, "notRestored": not_restored, "offline": offline, "count": reported }))
 }
 
 pub async fn trash_restore_all(app: &App) -> Result<Value> {
-    Ok(app.immich.post("/api/trash/restore", json!({})).await?)
+    let response = app.immich.post("/api/trash/restore", json!({})).await?;
+    // What is still there afterwards is what Immich would not restore.
+    let left = app
+        .immich
+        .get("/api/assets/statistics?isTrashed=true")
+        .await
+        .ok()
+        .and_then(|s| s.get("total").and_then(|v| v.as_u64()))
+        .unwrap_or(0);
+    Ok(json!({ "count": response.get("count"), "left": left }))
 }
 
 pub async fn trash_empty(app: &App) -> Result<Value> {

@@ -697,7 +697,7 @@ Item {
             font.pixelSize: root.theme.small
           }
           TextButton {
-            visible: parent.loaded && (headerHover.containsMouse || root.selecting)
+            visible: parent.loaded && (headerHover.hovered || root.selecting)
             anchors.right: parent.right
             anchors.verticalCenter: monthLabel.verticalCenter
             theme: root.theme
@@ -706,12 +706,9 @@ Item {
             fontSize: root.theme.small
             onClicked: root.selectBucket(rowItem.bucket)
           }
-          MouseArea {
-            id: headerHover
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.NoButton
-          }
+          // A handler on the header itself stays hovered while the pointer is
+          // on the button, so the button does not hide itself and blink.
+          HoverHandler { id: headerHover }
         }
       }
 

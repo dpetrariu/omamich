@@ -299,9 +299,21 @@ def main():
         print("ok: restoring from the trash, and Show finds the photos in the timeline")
         h.nav("go:trash", 2)
         wait_for("one left in the trash", lambda: h.value("app.activeGrid().total") == 1)
-        h.js("app.service.call('trash.restoreAll', {}, function() { app.refreshContent() })")
-        wait_for("everything restored", lambda: not any(v["trashed"] for v in state(port)["assets"].values()))
-        print("ok: trash view and restore all")
+        # The last one is offline: its file left the external library, so Immich keeps it.
+        offline_id = h.value("app.activeGrid().assetAt({ bucket: app.activeGrid().buckets[0].key, index: 0 }).id")
+        h.nav("first")
+        h.key("trash", 2)
+        assert state(port)["assets"][offline_id]["trashed"], "the mock keeps offline photos in the trash"
+        message = h.value("hooks.toast.message")
+        assert "offline" in message and "Restored" not in message, message
+        assert h.value("app.activeGrid().total") == 1, "a photo Immich kept must stay in the trash view"
+        h.shot("16c-offline-kept")
+        h.nav("open", 1.5)
+        wait_for("details say offline", lambda: h.value("hooks.viewer.details ? hooks.viewer.details.isOffline : false") is True)
+        h.nav("back", 1)
+        print("ok: an offline photo Immich will not restore is reported, not hidden")
+
+        print("ok: trash view and restore")
 
         # Sharing: partners.
         h.nav("go:sharing", 2.5)

@@ -1,0 +1,55 @@
+{
+  "about": "A photo library for screenshots, built from Wikimedia Commons' quality images: landscapes, wildlife, food and night skies, with no identifiable people. fetch.py reads each photo's licence from Commons and refuses any that is not CC BY, CC BY-SA, CC0 or public domain, takes its camera details from the file and writes the credits. Places are the photos' own (from their GPS, or the landmark they show); the dates are made up, to give the timeline trips and seasons.",
+  "photos": [
+    {"key": "kirkjufell-falls", "file": "Kirkjufell, Iceland, 20240714 1631 0713.jpg", "taken": "2026-10-14T16:31:00", "city": "Grundarfjörður", "country": "Iceland", "lat": 64.925962, "lon": -23.312261, "description": "Kirkjufell from the falls", "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+    {"key": "kirkjufell", "file": "Kirkjufell, Vesturland, Islandia, 2014-08-14, DD 091.JPG", "taken": "2026-10-14T17:05:00", "city": "Grundarfjörður", "country": "Iceland", "lat": 64.926, "lon": -23.312, "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+    {"key": "reynisfjara-stack", "file": "Reynisfjara, Suðurland, Islandia, 2014-08-17, DD 164.JPG", "taken": "2026-10-18T10:12:00", "city": "Vík", "country": "Iceland", "lat": 63.404, "lon": -19.04, "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+    {"key": "reynisdrangar", "file": "Reynisfjara and Reynisdrangar, Iceland.jpg", "taken": "2026-10-18T10:40:00", "city": "Vík", "country": "Iceland", "lat": 63.404491, "lon": -19.10574, "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+    {"key": "seal", "file": "021 Wild smiling harbor seal at Jökulsárlón (Iceland) Photo by Giles Laurent.jpg", "taken": "2026-10-19T11:20:00", "city": "Jökulsárlón", "country": "Iceland", "lat": 64.059045, "lon": -16.177688, "description": "A harbour seal in the glacier lagoon", "favorite": true, "albums": ["iceland"], "tags": ["Travel/Iceland", "Wildlife"]},
+    {"key": "jokulsarlon", "file": "Jökulsárlón, Iceland, 20240719 1142 2543.jpg", "taken": "2026-10-19T11:42:00", "city": "Jökulsárlón", "country": "Iceland", "lat": 64.048029, "lon": -16.180859, "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+    {"key": "skogafoss-rainbow", "file": "Skógafoss July 2014.JPG", "taken": "2026-10-20T13:05:00", "city": "Skógar", "country": "Iceland", "lat": 63.531091, "lon": -19.512513, "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+    {"key": "skogafoss", "file": "Skógafoss Waterfall, Iceland, 20240720 1318 2975.jpg", "taken": "2026-10-20T13:18:00", "city": "Skógar", "country": "Iceland", "lat": 63.529548, "lon": -19.513141, "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+    {"key": "seljalandsfoss", "file": "Seljalandsfoss Waterfall, Iceland, 20240720 1501 3099.jpg", "taken": "2026-10-20T15:01:00", "city": "Seljalandsfoss", "country": "Iceland", "lat": 63.6151, "lon": -19.988179, "albums": ["iceland"], "tags": ["Travel/Iceland"]},
+
+    {"key": "tre-cime", "file": "Drei Zinnen Tre Cime di Lavaredo Dolomites.jpg", "taken": "2025-10-03T09:15:00", "city": "Auronzo di Cadore", "country": "Italy", "lat": 46.62858, "lon": 12.29705, "description": "The three peaks of Lavaredo", "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "tre-cime-side", "file": "Tre Cime di Lavaredo dal lato.JPG", "taken": "2025-10-03T11:02:00", "city": "Auronzo di Cadore", "country": "Italy", "lat": 46.6186, "lon": 12.3055, "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "valle-della-rienza", "file": "Valle della Rienza and Tre Cime di Lavaredo from Alpe Specie, Val Pusteria, Trentino-Alto Adige, Italy, 2025 October.jpg", "taken": "2025-10-04T10:30:00", "city": "Dobbiaco", "country": "Italy", "lat": 46.63991, "lon": 12.210638, "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "braies", "file": "Lago di Braies South Tyrol 3.jpg", "taken": "2025-10-05T08:40:00", "city": "Braies", "country": "Italy", "lat": 46.690406, "lon": 12.081369, "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "braies-boats", "file": "Lago di Braies South Tyrol 6.jpg", "taken": "2025-10-05T09:10:00", "city": "Braies", "country": "Italy", "lat": 46.698519, "lon": 12.086161, "favorite": true, "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "seceda", "file": "Furnadoia de Seceda y Resciesa.JPG", "taken": "2025-10-06T08:05:00", "city": "Ortisei", "country": "Italy", "lat": 46.59748, "lon": 11.72442, "description": "Above the clouds at Seceda", "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "funes-autumn", "file": "Val de Funes cun la Odles d'auton Südtirol.jpg", "taken": "2025-10-07T15:20:00", "city": "Funes", "country": "Italy", "lat": 46.65218, "lon": 11.71796, "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "funes-chapel", "file": "Villnöß Johanniskapelle mit Geisler.jpg", "taken": "2025-10-07T16:05:00", "city": "Funes", "country": "Italy", "lat": 46.63528, "lon": 11.72418, "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+    {"key": "funes-odle", "file": "Val di Funes and Gruppo delle Odle from St Magdalena, Trentino-Alto Adige, Italy, 2025 October.jpg", "taken": "2025-10-08T10:45:00", "city": "Funes", "country": "Italy", "lat": 46.648708, "lon": 11.715327, "albums": ["dolomites"], "tags": ["Travel/Dolomites"]},
+
+    {"key": "fushimi-torii", "file": "Torii path with lantern at Fushimi Inari Taisha Shrine, Kyoto, Japan.jpg", "taken": "2025-11-12T08:30:00", "city": "Kyoto", "country": "Japan", "lat": 34.966523, "lon": 135.775222, "albums": ["japan"], "tags": ["Travel/Japan"]},
+    {"key": "fushimi-fox", "file": "20181110 Fushimi Inari shrine 3.jpg", "taken": "2025-11-12T09:02:00", "city": "Kyoto", "country": "Japan", "lat": 34.967, "lon": 135.773, "albums": ["japan"], "tags": ["Travel/Japan"]},
+    {"key": "kinkaku-ji", "file": "Kinkaku-ji in November 2016 -02.jpg", "taken": "2025-11-13T10:15:00", "city": "Kyoto", "country": "Japan", "lat": 35.039403, "lon": 135.729364, "albums": ["japan"], "tags": ["Travel/Japan"]},
+    {"key": "kinkaku-ji-reflection", "file": "Water reflection of Kinkaku-ji Temple a sunny day, Kyoto, Japan.jpg", "taken": "2025-11-13T10:40:00", "city": "Kyoto", "country": "Japan", "lat": 35.039068, "lon": 135.728963, "description": "The Golden Pavilion", "favorite": true, "albums": ["japan"], "tags": ["Travel/Japan"]},
+    {"key": "arashiyama", "file": "Bamboo Forest, Arashiyama, Kyoto, Japan.jpg", "taken": "2025-11-14T07:50:00", "city": "Kyoto", "country": "Japan", "lat": 35.016858, "lon": 135.670383, "albums": ["japan"], "tags": ["Travel/Japan"]},
+    {"key": "arashiyama-path", "file": "Bamboo Grove, Arashiyama, Kyoto, Japan.jpg", "taken": "2025-11-14T08:05:00", "city": "Kyoto", "country": "Japan", "lat": 35.017358, "lon": 135.672367, "albums": ["japan"], "tags": ["Travel/Japan"]},
+    {"key": "fuji", "file": "View towards Mount Fuji from Arakurayama Sengen Park in Fujiyoshida, Yamanashi, Japan, 2024 May - 2.jpg", "taken": "2025-11-17T09:30:00", "city": "Fujiyoshida", "country": "Japan", "lat": 35.50189, "lon": 138.801755, "description": "Mount Fuji from Arakurayama", "albums": ["japan"], "tags": ["Travel/Japan"]},
+
+    {"key": "cardamom-buns", "file": "Cardamom buns.jpg", "taken": "2026-01-05T16:47:00", "city": "Tuntorp", "country": "Sweden", "lat": 58.384122, "lon": 11.473736, "albums": ["baking"], "tags": ["Food"]},
+    {"key": "semla", "file": "Semla 2026 01.jpg", "taken": "2026-02-17T15:10:00", "description": "Semla for Shrove Tuesday", "albums": ["baking"], "tags": ["Food"]},
+    {"key": "apple-cake", "file": "Apple cake with vanilla ice cream 2.jpg", "taken": "2026-06-21T18:07:00", "city": "Tuntorp", "country": "Sweden", "lat": 58.384123, "lon": 11.473737, "albums": ["baking"], "tags": ["Food"]},
+    {"key": "beetroots", "file": "Beetroots in a basket.jpg", "taken": "2026-09-20T14:07:00", "city": "Tuntorp", "country": "Sweden", "lat": 58.384084, "lon": 11.473926, "tags": ["Food"]},
+
+    {"key": "robin", "file": "Erithacus rubecula with cocked head.jpg", "taken": "2026-03-08T09:20:00", "country": "United Kingdom", "lat": 53.594389, "lon": -2.675386, "albums": ["birds"], "tags": ["Wildlife"]},
+    {"key": "kingfisher", "file": "Common Kingfisher Alcedo atthis.jpg", "taken": "2026-05-16T07:45:00", "country": "Germany", "lat": 50.790311, "lon": 8.882447, "albums": ["birds"], "tags": ["Wildlife"]},
+    {"key": "robin-juvenile", "file": "European robin (Erithacus rubecula) juvenile.jpg", "taken": "2026-08-23T08:10:00", "country": "United Kingdom", "lat": 50.996653, "lon": 0.591765, "albums": ["birds"], "tags": ["Wildlife"]},
+    {"key": "kingfisher-wings", "file": "Common kingfisher on a branch opening its wings.jpg", "taken": "2026-09-12T08:30:00", "country": "France", "lat": 48.934665, "lon": 2.314049, "favorite": true, "albums": ["birds"], "tags": ["Wildlife"]},
+
+    {"key": "star-trails", "file": "2012-03-14 21-42-55-file-etoiles-14f-2min-3d.jpg", "taken": "2026-04-14T21:42:00", "country": "France", "lat": 47.62173, "lon": 6.89682, "albums": ["night"], "tags": ["Night sky"]},
+    {"key": "la-hague", "file": "2017-04 Circumpolar trails sunset at La Hague lighthouse.jpg", "taken": "2026-05-30T22:50:00", "city": "La Hague", "country": "France", "lat": 49.717116, "lon": -1.947767, "albums": ["night"], "tags": ["Night sky"]},
+    {"key": "bontecou", "file": "Bontecou Lake Milky Way panorama.jpg", "taken": "2026-06-26T23:30:00", "city": "Millbrook", "country": "United States", "lat": 41.850479, "lon": -73.656249, "albums": ["night"], "tags": ["Night sky"]},
+    {"key": "oeschinensee", "file": "036 Milky Way during Perseids seen from Oeschinensee with water reflections Photo by Giles Laurent.jpg", "taken": "2026-08-12T23:55:00", "city": "Kandersteg", "country": "Switzerland", "lat": 46.498, "lon": 7.727, "description": "Perseids over Oeschinensee", "favorite": true, "albums": ["night"], "tags": ["Night sky"]}
+  ],
+  "albums": [
+    {"key": "iceland", "name": "Iceland", "description": "A week on the ring road, south and west", "cover": "skogafoss"},
+    {"key": "dolomites", "name": "Dolomites", "description": "October in South Tyrol", "cover": "braies-boats"},
+    {"key": "japan", "name": "Kyoto and Fuji", "description": "", "cover": "kinkaku-ji-reflection"},
+    {"key": "birds", "name": "Birds", "description": "", "cover": "kingfisher-wings"},
+    {"key": "night", "name": "Night skies", "description": "", "cover": "oeschinensee"},
+    {"key": "baking", "name": "Baking", "description": "", "cover": "cardamom-buns"}
+  ]
+}

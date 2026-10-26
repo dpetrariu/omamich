@@ -6,11 +6,16 @@ sync tests upload into it); with --seed it holds a small synthetic library
 with people, places, albums, tags, partners, trash and generated images, for
 driving the whole window.
 
-usage: mock_immich.py PORT [--seed]
+usage: mock_immich.py PORT [--seed | --showcase DIR]
+
+--showcase DIR serves real photos (landscapes, wildlife, food, night skies from
+Wikimedia Commons, which tools/showcase/fetch.py writes to DIR) in trips and
+albums, for screenshots (tools/showcase/screenshots.py); the tests use --seed.
 """
 import base64
 import hashlib
 import json
+import os
 import re
 import struct
 import sys
@@ -153,21 +158,22 @@ def asset_view(a):
             for t in TAGS.values() if a["id"] in t["assetIds"]]
     people = [{"id": p["id"], "name": p["name"], "isHidden": p["isHidden"], "updatedAt": "2026-01-01T00:00:00Z"}
               for p in PEOPLE.values() if a["id"] in p["assetIds"]]
-    w = 1200
-    h = int(w / a["ratio"])
+    w = a.get("width", 1200)
+    h = a.get("height", int(w / a["ratio"]))
     return {
         "id": a["id"], "originalFileName": a["originalFileName"], "type": a["type"], "checksum": a["checksum"],
         "isFavorite": a["isFavorite"], "isTrashed": a["isTrashed"], "visibility": a["visibility"],
         "fileCreatedAt": a["fileCreatedAt"], "localDateTime": a["fileCreatedAt"], "width": w, "height": h,
         "duration": a["duration"], "livePhotoVideoId": a["livePhotoVideoId"], "ownerId": a["ownerId"],
         "owner": {"id": a["ownerId"], "name": USERS[a["ownerId"]]["name"]}, "originalPath": a["path"],
-        "originalMimeType": "image/png", "thumbhash": None, "isOffline": bool(a.get("offline")), "isEdited": False,
+        "originalMimeType": a.get("mime", "image/png"), "thumbhash": None, "isOffline": bool(a.get("offline")), "isEdited": False,
         "exifInfo": {"description": a["description"], "rating": a["rating"], "city": a["city"], "country": a["country"],
                      "state": None, "latitude": a["lat"], "longitude": a["lon"], "make": a["make"], "model": a["model"],
                      "exifImageWidth": w, "exifImageHeight": h, "fileSizeInByte": len(a["data"]),
                      "dateTimeOriginal": a["fileCreatedAt"], "fNumber": 1.8 if a["make"] else None,
                      "focalLength": 26 if a["make"] else None, "iso": 100 if a["make"] else None,
-                     "exposureTime": "1/250" if a["make"] else None, "lensModel": None, "timeZone": None},
+                     "exposureTime": "1/250" if a["make"] else None, "lensModel": None, "timeZone": None,
+                     **a.get("exif", {})},
         "people": people, "tags": tags,
     }
 
@@ -288,6 +294,42 @@ def seed():
                    "album": {"id": summer, "albumName": "Summer", "albumThumbnailAssetId": ids[14]}, "assets": []}
 
 
+def seed_showcase(folder):
+    """Real photos from FOLDER (tools/showcase/fetch.py): trips, birds, baking
+    and night skies, with their places and cameras, in albums and tags."""
+    library = json.load(open(os.path.join(folder, "library.json")))
+    USERS[ME]["name"] = "Demo"
+    keys = {}
+    for photo in library["photos"]:
+        data = open(os.path.join(folder, photo["image"]), "rb").read()
+        original = photo["original"]
+        exif = dict(photo.get("exif", {}), exifImageWidth=original["width"], exifImageHeight=original["height"],
+                    fileSizeInByte=original["bytes"])
+        keys[photo["key"]] = new_asset(
+            photo["key"].replace("-", "_").upper() + ".JPG", data, photo["taken"] + ".000Z",
+            thumb=open(os.path.join(folder, photo["thumb"]), "rb").read(), mime="image/jpeg",
+            width=original["width"], height=original["height"], ratio=photo["width"] / photo["height"],
+            city=photo.get("city"), country=photo.get("country"), lat=photo.get("lat"), lon=photo.get("lon"),
+            make=exif.get("make"), model=exif.get("model"), exif=exif,
+            description=photo.get("description", ""), isFavorite=photo.get("favorite", False))
+    for album in library["albums"]:
+        aid = str(uuid.uuid4())
+        members = [keys[p["key"]] for p in library["photos"] if album["key"] in p.get("albums", [])]
+        ALBUMS[aid] = {"id": aid, "albumName": album["name"], "assetIds": members, "description": album["description"],
+                       "order": "desc", "cover": keys[album["cover"]], "ownerId": ME, "users": {}}
+    tags = {}
+    for photo in library["photos"]:
+        for value in photo.get("tags", []):
+            parent = None
+            for depth, name in enumerate(value.split("/")):
+                path = "/".join(value.split("/")[:depth + 1])
+                if path not in tags:
+                    tid = str(uuid.uuid4())
+                    tags[path] = TAGS[tid] = {"id": tid, "name": name, "value": path, "color": None, "parentId": parent, "assetIds": []}
+                parent = tags[path]["id"]
+            tags[value]["assetIds"].append(keys[photo["key"]])
+
+
 # ------------------------------------------------------------------ server
 
 class Handler(BaseHTTPRequestHandler):
@@ -393,8 +435,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.not_found()
             if m.group(2) is None:
                 return self.reply(200, asset_view(a))
+            if m.group(2) == "/thumbnail" and a.get("thumb") and q.get("size") != "preview":
+                return self.reply(200, raw=a["thumb"], ctype=a.get("mime", "image/png"))
             if m.group(2) in ("/thumbnail", "/original"):
-                return self.reply(200, raw=a["data"], ctype="image/png")
+                return self.reply(200, raw=a["data"], ctype=a.get("mime", "image/png"))
             return self.not_found()
         if path == "/api/people":
             people = [p for p in PEOPLE.values() if q.get("withHidden") == "true" or not p["isHidden"]]
@@ -790,4 +834,6 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if "--seed" in sys.argv:
         seed()
+    if "--showcase" in sys.argv:
+        seed_showcase(sys.argv[sys.argv.index("--showcase") + 1])
     ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()

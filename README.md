@@ -2,6 +2,15 @@
 
 Your [Immich](https://immich.app) photo library in a native Omarchy window, plus Mimick-style folder sync. Omamich follows the active Omarchy theme, is keyboard-first, and lives in the shell like [Omamail](https://github.com/huacnlee/omamail): a service that keeps running, a bar icon, and a window you summon.
 
+![Omamich's timeline: a week in Iceland, day by day](docs/images/photos.webp)
+
+| | |
+|---|---|
+| ![A photo with its details: camera, place, album and tags](docs/images/viewer.webp) | ![Albums, each with its cover and dates](docs/images/albums.webp) |
+| ![Places, one cover per city](docs/images/places.webp) | |
+
+<sub>The library in these screenshots is freely licensed photos from Wikimedia Commons, served by Omamich's test server; see [the photo credits](docs/images/CREDITS.md).</sub>
+
 ## What it does
 
 - **Timeline** of the whole library, month by month, in justified rows with day headers. Months load as they come near the screen; a scrubber on the right jumps through the years. Libraries of 100,000+ photos scroll the same as small ones.
@@ -86,6 +95,13 @@ A checkout with a `target/` folder is treated as a development copy: the plugin 
 Releases: `scripts/release.sh 0.2.0` bumps the version in `Cargo.toml` and `manifest.json`, tags and pushes; the Release workflow tests, builds the x86_64 and ARM backends and publishes them with `SHA256SUMS`. CI runs the unit, sync, library and UI-logic tests on every push.
 
 `OMAMICH_HOME=/tmp/x omamich serve` runs a backend with its own config, data and cache, and never touches the keyring. The end-to-end tests use this with `tests/mock_immich.py`, so they never touch a real library.
+
+The README's screenshots are taken off-screen against the mock server, serving photos from Wikimedia Commons (licences checked, credits written):
+
+```bash
+python3 tools/showcase/fetch.py ~/.cache/omamich-showcase
+python3 tools/showcase/screenshots.py target/debug/omamich ~/.cache/omamich-showcase docs/images
+```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit.
 

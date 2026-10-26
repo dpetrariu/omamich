@@ -13,11 +13,22 @@ Item {
   property var asset: null
   property var details: null
   property var albums: []
+  // The photo's faces (asset.faces), one circle each; until they load, the
+  // people from the details.
+  property var faces: []
+  property string selectedFace: ""
+  readonly property var faceList: {
+    if (faces.length > 0)
+      return faces.filter(function(f) { return !f.person || !f.person.isHidden })
+    return details ? details.people.filter(function(p) { return !p.isHidden }).map(function(p) { return { id: "", person: p } }) : []
+  }
 
   signal closed()
   signal toast(string text, string tone)
   signal changed()
   signal personOpened(var person)
+  signal faceHovered(string id)
+  signal faceClicked(var face, Item item)
   signal albumOpened(var album)
   signal placeOpened(var place)
   signal tagOpened(var tag)
@@ -264,9 +275,10 @@ Item {
         onTitleClicked: if (root.exif.city || root.exif.country) root.placeOpened({ city: root.exif.city || "", country: root.exif.country || "" })
       }
 
-      // People
+      // People: a circle per face. Pointing at one frames it on the photo;
+      // clicking picks it and offers to open or change the person.
       Column {
-        visible: !!root.details && root.details.people.length > 0
+        visible: root.faceList.length > 0
         width: parent.width
         spacing: root.theme.space(8)
         Text {
@@ -279,33 +291,58 @@ Item {
           width: parent.width
           spacing: root.theme.space(10)
           Repeater {
-            model: root.details ? root.details.people.filter(function(p) { return !p.isHidden }) : []
+            model: root.faceList
             delegate: Item {
+              id: faceItem
               required property var modelData
+              readonly property var person: modelData.person
+              readonly property bool chosen: !!modelData.id && modelData.id === root.selectedFace
               width: root.theme.space(64)
               height: root.theme.space(84)
+              Rectangle {
+                anchors.centerIn: face
+                width: face.width + root.theme.space(8)
+                height: width
+                radius: width / 2
+                color: "transparent"
+                border.width: faceItem.chosen || faceArea.containsMouse ? root.theme.space(2) : 0
+                border.color: root.theme.accent
+              }
               RoundImage {
                 id: face
                 width: parent.width; height: width
                 radius: width / 2
                 fill: root.theme.raised
                 sourceSize: 160
-                source: root.service.personUrl(modelData.id, modelData.version)
+                source: faceItem.person ? root.service.personUrl(faceItem.person.id, faceItem.person.version) : ""
+              }
+              Glyph {
+                visible: !faceItem.person
+                anchors.centerIn: face
+                name: "person"
+                size: root.theme.display
+                color: root.theme.dim
               }
               Text {
                 anchors { top: face.bottom; topMargin: root.theme.space(4); left: parent.left; right: parent.right }
                 horizontalAlignment: Text.AlignHCenter
-                text: modelData.name || "Unnamed"
+                text: !faceItem.person ? "Unknown" : faceItem.person.name || "Unnamed"
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
-                color: modelData.name ? root.theme.foreground : root.theme.dim
+                color: faceItem.person && faceItem.person.name ? root.theme.foreground : root.theme.dim
                 font.family: root.theme.font
                 font.pixelSize: root.theme.caption
               }
               MouseArea {
+                id: faceArea
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.personOpened({ id: modelData.id, name: modelData.name, version: modelData.version, isHidden: false })
+                onContainsMouseChanged: root.faceHovered(containsMouse ? faceItem.modelData.id : "")
+                onClicked: {
+                  if (faceItem.modelData.id) root.faceClicked(faceItem.modelData, faceItem)
+                  else root.personOpened({ id: faceItem.person.id, name: faceItem.person.name, version: faceItem.person.version, isHidden: false })
+                }
               }
             }
           }

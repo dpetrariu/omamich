@@ -306,8 +306,50 @@ def main():
         # The picture reloads only after Immich's crop job touched the person.
         final = "202601010000" + "%02d" % state(port)["people"][person]["updated"]
         wait_for("the thumbnail refreshed after the crop", lambda: h.value("app.page.person.version") == final, 10)
-        h.nav("back")
         print("ok: people, person page, rename and key photo")
+
+        # Faces: a photo of Jenny with a stranger Immich did not recognise.
+        photo = h.value("app.activeGrid().currentAsset().id")
+        stranger = next((k for k, f in state(port)["faces"].items() if f["assetId"] == photo and f["personId"] is None), None)
+        if not stranger:
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/_face", method="POST", headers={"x-api-key": KEY},
+                                         data=json.dumps({"assetId": photo, "personId": None, "slot": 3}).encode())
+            stranger = json.load(urllib.request.urlopen(req))["id"]
+        jenny_face = next(k for k, f in state(port)["faces"].items() if f["assetId"] == photo and f["personId"] == person)
+        h.nav("open", 1.5)
+        wait_for("the faces", lambda: h.value("hooks.viewer.faces.length") == 2, 10)
+        h.js("app.setInfo(true)")
+        h.key("faces", 1.0)
+        assert h.value("hooks.viewer.showFaces") is True
+        assert h.value("hooks.info.faceList.map(function(f) { return f.person ? f.person.name : '?' }).join(',')") == "Jenny,?"
+        h.shot("12b-faces")
+        h.key("faces", 0.3)
+        # Name the stranger: they become Alvar, in this photo only.
+        alvar = next(k for k, p in state(port)["people"].items() if p["name"] == "Alvar")
+        h.js(f"app.showFaceMenu(hooks.viewer.faces[1], hooks.info)")
+        assert h.value("hooks.viewer.selectedFace") == stranger
+        assert h.value("hooks.menu.items.map(function(i) { return i.label })") == ["Who is this?..."]
+        h.js("hooks.menu.activate(hooks.menu.items.map(function(i) { return i.id }).indexOf('change'))")
+        wait_for("the picker", lambda: h.value("hooks.picker.opened") is True)
+        h.js("hooks.picker.choose('Alvar')")
+        wait_for("the stranger is Alvar", lambda: state(port)["faces"][stranger]["personId"] == alvar, 10)
+        wait_for("the details follow", lambda: h.value("hooks.info.faceList.map(function(f) { return f.person ? f.person.name : '?' }).join(',')") == "Jenny,Alvar", 10)
+        # Jenny's face moves to Emma, and Undo moves it back.
+        emma = next(k for k, p in state(port)["people"].items() if p["name"] == "Emma")
+        h.js("app.showFaceMenu(hooks.viewer.faces[0], hooks.info)")
+        assert h.value("hooks.menu.items.map(function(i) { return i.label })") == ["Open Jenny", "Change person..."]
+        h.js("hooks.menu.activate(hooks.menu.items.map(function(i) { return i.id }).indexOf('change'))")
+        wait_for("the picker", lambda: h.value("hooks.picker.opened") is True)
+        h.js("hooks.picker.choose('Emma')")
+        wait_for("Jenny's face is Emma's", lambda: state(port)["faces"][jenny_face]["personId"] == emma, 10)
+        assert h.value("hooks.toast.message") == "Moved to Emma"
+        h.js("hooks.toast.action()")
+        wait_for("Undo gives it back", lambda: state(port)["faces"][jenny_face]["personId"] == person, 10)
+        wait_for("the frame is let go", lambda: h.value("hooks.viewer.selectedFace") == "", 5)
+        h.js("app.setInfo(false)")
+        h.nav("back", 1.5)
+        h.nav("back")
+        print("ok: face frames, naming a stranger, moving a face and Undo")
 
         # Places, explore, search.
         h.nav("go:places", 2.5)

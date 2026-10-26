@@ -537,6 +537,60 @@ pub async fn person_update(app: &App, params: &Value) -> Result<Value> {
     Ok(slim_person(&person))
 }
 
+// ---------------------------------------------------------------- faces
+
+/// The faces Immich found in a photo: where each one is (in the size of the
+/// image Immich measured it on) and who it is, if anyone.
+pub async fn asset_faces(app: &App, params: &Value) -> Result<Value> {
+    let id = id_param(params, "id")?;
+    let faces = app.immich.get(&format!("/api/faces?id={id}")).await?;
+    Ok(Value::Array(faces.as_array().map(|list| list.iter().filter_map(slim_face).collect()).unwrap_or_default()))
+}
+
+fn slim_face(f: &Value) -> Option<Value> {
+    let num = |k: &str| f.get(k).and_then(|v| v.as_f64());
+    let (w, h) = (num("imageWidth")?, num("imageHeight")?);
+    if w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    let person = f.get("person").filter(|p| p.is_object()).map(|p| json!({
+        "id": p.get("id"),
+        "name": p.get("name"),
+        "isHidden": p.get("isHidden"),
+        "version": version_of(p.get("updatedAt")),
+    }));
+    Some(json!({
+        "id": f.get("id")?.as_str()?,
+        // Fractions of the picture, so the window needs no image sizes. A box
+        // may reach past an edge; the window clips it.
+        "x1": num("boundingBoxX1")? / w,
+        "y1": num("boundingBoxY1")? / h,
+        "x2": num("boundingBoxX2")? / w,
+        "y2": num("boundingBoxY2")? / h,
+        "person": person.unwrap_or(Value::Null),
+    }))
+}
+
+/// Give one face to another person: `personId`, or a new person called
+/// `name`.
+pub async fn face_reassign(app: &App, params: &Value) -> Result<Value> {
+    let face = id_param(params, "faceId")?;
+    let person_id = match str_param(params, "personId") {
+        "" => {
+            let name: String = str_param(params, "name").trim().chars().take(200).collect();
+            if name.is_empty() {
+                return Err(Error::invalid("Pick a person or type a name"));
+            }
+            let person = app.immich.post("/api/people", json!({ "name": name })).await?;
+            person.get("id").and_then(|v| v.as_str()).map(str::to_string).ok_or_else(|| Error::new(crate::error::SERVER, "Immich did not create the person"))?
+        }
+        id => require_id(id)?.to_string(),
+    };
+    // Immich's path names the person and the body the face.
+    let person = app.immich.put(&format!("/api/faces/{person_id}"), json!({ "id": face })).await?;
+    Ok(slim_person(&person))
+}
+
 pub async fn person_merge(app: &App, params: &Value) -> Result<Value> {
     let id = id_param(params, "id")?;
     let ids = ids_param(params, "ids")?;

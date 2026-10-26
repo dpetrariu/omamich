@@ -25,6 +25,14 @@ Item {
   property real panY: 0
   property bool playingLive: false
   property string videoError: ""
+  // The faces Immich found here (asset.faces): boxes as fractions of the
+  // picture, and who each one is.
+  property var faces: []
+  // A face pointed at in Details, the one picked there, and every face
+  // (Shift+F) get a frame on the photo.
+  property string hoverFace: ""
+  property string selectedFace: ""
+  property bool showFaces: false
 
   readonly property bool isVideo: !!asset && !asset.isImage
   // A file on this computer: shown from disk; its Immich copy, if any, is
@@ -44,11 +52,15 @@ Item {
   signal actionRequested(string id)
   signal infoToggled()
   signal menuRequested(Item item)
+  signal faceClicked(var face, Item item)
 
   onAssetChanged: {
     resetZoom()
     playingLive = false
     details = null
+    faces = []
+    hoverFace = ""
+    selectedFace = ""
     if (asset) loadDetails()
     else player.stop()
   }
@@ -59,6 +71,11 @@ Item {
     service.call("asset.get", { id: id }, function(r, e) { if (!root) return;
       if (!root.asset || root.remoteIdOf(root.asset) !== id) return
       if (!e) root.details = r
+    })
+    if (asset.isImage === false) return
+    service.call("asset.faces", { id: id }, function(r, e) { if (!root) return;
+      if (!root.asset || root.remoteIdOf(root.asset) !== id) return
+      root.faces = e ? [] : r
     })
   }
   function reloadDetails() { if (asset) loadDetails() }
@@ -208,6 +225,77 @@ Item {
         if (root.isVideo) return
         var factor = wheel.angleDelta.y > 0 ? 1.18 : 1 / 1.18
         root.zoomBy(factor, wheel.x, wheel.y)
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ face frames
+  // Drawn in the stage's coordinates rather than scaled with the picture, so
+  // the lines and names stay one size at any zoom.
+  Item {
+    id: frames
+    anchors.fill: stage
+    visible: !root.isVideo && !root.playingLive
+    readonly property real pw: preview.paintedWidth > 0 ? preview.paintedWidth : placeholder.width
+    readonly property real ph: preview.paintedHeight > 0 ? preview.paintedHeight : placeholder.height
+    function sx(f) { return width / 2 + root.panX + (Math.max(0, Math.min(1, f)) - 0.5) * pw * root.zoom }
+    function sy(f) { return height / 2 + root.panY + (Math.max(0, Math.min(1, f)) - 0.5) * ph * root.zoom }
+
+    Repeater {
+      model: root.faces
+      delegate: Item {
+        id: frame
+        required property var modelData
+        readonly property bool chosen: modelData.id === root.selectedFace
+        readonly property bool pointed: modelData.id === root.hoverFace
+        readonly property bool hiddenPerson: !!modelData.person && modelData.person.isHidden === true
+        visible: (root.showFaces && !hiddenPerson) || chosen || pointed
+        x: frames.sx(modelData.x1)
+        y: frames.sy(modelData.y1)
+        width: Math.max(4, frames.sx(modelData.x2) - x)
+        height: Math.max(4, frames.sy(modelData.y2) - y)
+
+        // A dark outline under the light one, so the frame shows on any photo.
+        Rectangle {
+          anchors.fill: parent
+          anchors.margins: -1
+          color: "transparent"
+          radius: root.theme.radius
+          border.width: (frame.chosen ? 3 : 2) + 2
+          border.color: Qt.rgba(0, 0, 0, 0.45)
+        }
+        Rectangle {
+          anchors.fill: parent
+          color: "transparent"
+          radius: root.theme.radius
+          border.width: frame.chosen ? 3 : 2
+          border.color: frame.chosen || frame.pointed ? root.theme.accent : "white"
+          // Faces Immich did not recognise get a lighter frame.
+          opacity: frame.modelData.person ? 1 : 0.6
+        }
+        Rectangle {
+          id: nameTag
+          anchors { horizontalCenter: parent.horizontalCenter; top: parent.bottom; topMargin: root.theme.space(4) }
+          width: tagText.implicitWidth + root.theme.space(12)
+          height: tagText.implicitHeight + root.theme.space(4)
+          radius: height / 2
+          color: Qt.rgba(0, 0, 0, 0.65)
+          Text {
+            id: tagText
+            anchors.centerIn: parent
+            text: frame.modelData.person ? (frame.modelData.person.name || "Unnamed") : "Unknown"
+            textFormat: Text.PlainText
+            color: "white"
+            font.family: root.theme.font
+            font.pixelSize: root.theme.caption
+          }
+        }
+        MouseArea {
+          anchors.fill: parent
+          enabled: frame.visible
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.faceClicked(frame.modelData, frame)
+        }
       }
     }
   }

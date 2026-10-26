@@ -22,6 +22,8 @@ from urllib.parse import parse_qs, unquote
 
 KEY = "testkey-0123456789"
 LOCK = threading.Lock()
+# Faces Immich found: id -> {assetId, personId (None when not recognised), box}.
+FACES = {}
 ME = "11111111-1111-4111-8111-111111111111"
 ANA = "11111111-1111-4111-8111-222222222222"
 BEN = "11111111-1111-4111-8111-333333333333"
@@ -124,6 +126,26 @@ def scoped(query):
 
 def bucket_of(a):
     return a["fileCreatedAt"][:7] + "-01"
+
+
+def add_face(asset_id, person_id, slot):
+    fid = str(uuid.uuid4())
+    # Measured on a 1440 x 1080 preview, like Immich's; slot spreads them out.
+    x = 120 + (slot % 4) * 300
+    FACES[fid] = {"id": fid, "assetId": asset_id, "personId": person_id,
+                  "box": [x, 240, x + 240, 560], "imageWidth": 1440, "imageHeight": 1080}
+    return fid
+
+
+def move_face(face, person_id):
+    """Point a face at another person (or none), keeping each person's photos in step."""
+    old = face["personId"]
+    face["personId"] = person_id
+    asset = face["assetId"]
+    if old in PEOPLE and not any(f["assetId"] == asset and f["personId"] == old for f in FACES.values()):
+        PEOPLE[old]["assetIds"] = [i for i in PEOPLE[old]["assetIds"] if i != asset]
+    if person_id in PEOPLE and asset not in PEOPLE[person_id]["assetIds"]:
+        PEOPLE[person_id]["assetIds"].append(asset)
 
 
 def asset_view(a):
@@ -242,6 +264,10 @@ def seed():
         pid = str(uuid.uuid4())
         PEOPLE[pid] = {"id": pid, "name": name, "birthDate": birth, "isHidden": False, "isFavorite": p == 0,
                        "assetIds": [ids[k] for k in range(p, len(ids), 4)]}
+        for k in range(p, len(ids), 4):
+            add_face(ids[k], pid, p)
+    # A face Immich found but did not recognise, beside Jenni's.
+    add_face(ids[0], None, 3)
     for name, members in (("family", ids[0:6]), ("trip/2026", ids[12:18])):
         tid = str(uuid.uuid4())
         TAGS[tid] = {"id": tid, "name": name.split("/")[-1], "value": name, "color": "#4a90d9" if name == "family" else None,
@@ -317,6 +343,7 @@ class Handler(BaseHTTPRequestHandler):
                 "links": list(LINKS.values()),
                 "people": {k: {kk: vv for kk, vv in v.items() if kk != "assetIds"} for k, v in PEOPLE.items()},
                 "partners": PARTNERS,
+                "faces": FACES,
                 "log": LOG,
             })
 
@@ -386,6 +413,17 @@ class Handler(BaseHTTPRequestHandler):
             if m.group(2) == "/statistics":
                 return self.reply(200, {"assets": len(p["assetIds"])})
             return self.reply(200, self.person(p))
+        if path == "/api/faces":
+            faces = []
+            for f in FACES.values():
+                if f["assetId"] != q.get("id"):
+                    continue
+                person = PEOPLE.get(f["personId"])
+                x1, y1, x2, y2 = f["box"]
+                faces.append({"id": f["id"], "imageWidth": f["imageWidth"], "imageHeight": f["imageHeight"],
+                              "boundingBoxX1": x1, "boundingBoxY1": y1, "boundingBoxX2": x2, "boundingBoxY2": y2,
+                              "sourceType": "machine-learning", "person": self.person(person) if person else None})
+            return self.reply(200, faces)
         m = re.fullmatch(r"/api/users/([0-9a-f-]{36})/profile-image", path)
         if m:
             return self.reply(200, raw=png(32, 32, color_of(m.group(1))), ctype="image/png")
@@ -430,6 +468,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authed():
             return
         raw = self.body()
+        if path == "/_face":
+            # Tests: Immich found a face of this person (or of no one) here.
+            body = json.loads(raw)
+            with LOCK:
+                fid = add_face(body["assetId"], body.get("personId"), body.get("slot", 0))
+                if body.get("personId") in PEOPLE and body["assetId"] not in PEOPLE[body["personId"]]["assetIds"]:
+                    PEOPLE[body["personId"]]["assetIds"].append(body["assetId"])
+            return self.reply(200, {"id": fid})
         if path == "/_prefs":
             with LOCK:
                 PREFS.update(json.loads(raw))
@@ -538,6 +584,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/partners":
             PARTNERS["by"][body["sharedWithId"]] = False
             return self.reply(201, USERS[body["sharedWithId"]])
+        if path == "/api/people":
+            pid = str(uuid.uuid4())
+            PEOPLE[pid] = {"id": pid, "name": body.get("name", ""), "birthDate": None, "isHidden": False,
+                           "isFavorite": False, "assetIds": []}
+            return self.reply(201, self.person(PEOPLE[pid]))
         m = re.fullmatch(r"/api/people/([0-9a-f-]{36})/merge", path)
         if m:
             target = PEOPLE.get(m.group(1))
@@ -545,6 +596,9 @@ class Handler(BaseHTTPRequestHandler):
                 gone = PEOPLE.pop(i, None)
                 if gone and target:
                     target["assetIds"].extend(gone["assetIds"])
+                    for f in FACES.values():
+                        if f["personId"] == i:
+                            f["personId"] = target["id"]
             return self.reply(200, [])
         self.not_found()
 
@@ -628,6 +682,16 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             TAGS[m.group(1)]["color"] = body.get("color")
             return self.reply(200, {k: v for k, v in TAGS[m.group(1)].items() if k != "assetIds"})
+        m = re.fullmatch(r"/api/faces/([0-9a-f-]{36})", path)
+        if m:
+            # Like Immich: the path names the person, the body the face.
+            person = PEOPLE.get(m.group(1))
+            face = FACES.get(body.get("id"))
+            if not person or not face:
+                return self.reply(400, {"message": "Not found or no person.update access", "statusCode": 400})
+            move_face(face, person["id"])
+            person["updated"] = person.get("updated", 0) + 1
+            return self.reply(200, self.person(person))
         m = re.fullmatch(r"/api/people/([0-9a-f-]{36})", path)
         if m:
             person = PEOPLE.setdefault(m.group(1), {"id": m.group(1), "name": "", "isHidden": False, "isFavorite": False,

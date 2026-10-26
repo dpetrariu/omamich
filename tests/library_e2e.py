@@ -129,6 +129,28 @@ def main():
         # A key photo must be one the person is in; Immich refuses others.
         expect_error(backend, "person.update", {"id": person, "featureFaceAssetId": one}, "does not show this person")
         expect_error(backend, "person.update", {"id": person, "featureFaceAssetId": "../x"}, "")
+        # Faces: where they are and who they are; one moves to someone else.
+        def add_face(asset, person_id, slot):
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/_face", method="POST",
+                                         data=json.dumps({"assetId": asset, "personId": person_id, "slot": slot}).encode(),
+                                         headers={"x-api-key": "testkey-0123456789"})
+            return json.load(urllib.request.urlopen(req))["id"]
+        ada_face = add_face(one, person, 0)
+        stranger = add_face(one, None, 1)
+        faces = backend.call("asset.faces", {"id": one})
+        assert [f["id"] for f in faces] == [ada_face, stranger], faces
+        assert faces[0]["person"]["name"] == "Ada" and faces[1]["person"] is None, faces
+        assert abs(faces[0]["x1"] - 120 / 1440) < 1e-9 and abs(faces[0]["y2"] - 560 / 1080) < 1e-9, faces[0]
+        expect_error(backend, "asset.faces", {"id": "../x"}, "")
+        moved = backend.call("face.reassign", {"faceId": stranger, "personId": person})
+        assert moved["name"] == "Ada" and state(port)["faces"][stranger]["personId"] == person
+        made = backend.call("face.reassign", {"faceId": ada_face, "name": "  Bea "})
+        assert made["name"] == "Bea" and state(port)["faces"][ada_face]["personId"] == made["id"]
+        assert one in state(port)["people"][made["id"]].get("assetIds", [one])
+        expect_error(backend, "face.reassign", {"faceId": ada_face}, "pick a person")
+        expect_error(backend, "face.reassign", {"faceId": ada_face, "personId": "../x"}, "")
+        expect_error(backend, "face.reassign", {"faceId": "nope", "personId": person}, "")
+        print("ok: faces")
         backend.call("person.merge", {"id": "33333333-3333-4333-8333-333333333333", "ids": [person]})
         assert person not in state(port)["people"]
         print("ok: people")

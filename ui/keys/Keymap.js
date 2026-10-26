@@ -42,6 +42,7 @@ var BINDINGS = [
   { id: "zoomOut", keys: ["Shift+Z", "-"], contexts: ["viewer"], group: "Viewing", label: "Zoom out" },
   { id: "zoomReset", keys: ["0"], contexts: ["viewer"], group: "Viewing", label: "Fit to the window" },
   { id: "slideshow", keys: ["Shift+S"], contexts: ["viewer"], group: "Viewing", label: "Start or stop a slideshow" },
+  { id: "faces", keys: ["Shift+F"], contexts: ["viewer"], group: "Viewing", label: "Show or hide the faces Immich found" },
   { id: "fullscreen", keys: ["F11"], contexts: ANY, group: "Viewing", label: "Focus mode: hide the bars and sidebar" },
 
   // Selecting

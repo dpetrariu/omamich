@@ -428,6 +428,7 @@ Item {
     case "zoomIn": viewer.zoomBy(1.4); return
     case "zoomOut": viewer.zoomBy(1 / 1.4); return
     case "zoomReset": viewer.resetZoom(); return
+    case "faces": viewer.showFaces = !viewer.showFaces; return
     case "slideshow": viewer.slideshow = !viewer.slideshow; return
     case "rate":
       if (preferences.ratings === false) {
@@ -1251,6 +1252,8 @@ Item {
         visible: width > 0
         width: root.infoOpen && root.viewerAsset && !body.compact ? appTheme.space(340) : 0
         details: viewer.details
+        faces: viewer.faces
+        selectedFace: viewer.selectedFace
         asset: root.viewerAsset
         onClosed: root.setInfo(false)
         onToast: function(text, tone) { toast.show(text, { tone: tone }) }
@@ -1260,6 +1263,8 @@ Item {
         onPlaceOpened: function(place) { root.closeViewer(); root.go("places"); root.push({ kind: "place", place: place }) }
         onTagOpened: function(tag) { root.closeViewer(); root.go("tags"); root.push({ kind: "tag", tag: tag }) }
         onEditDate: root.editDate([root.viewerAsset], root.activeGrid())
+        onFaceHovered: function(id) { viewer.hoverFace = id }
+        onFaceClicked: function(face, item) { root.showFaceMenu(face, item) }
       }
 
       Viewer {
@@ -1277,6 +1282,7 @@ Item {
         onInfoToggled: root.setInfo(!root.infoOpen)
         infoOpen: root.infoOpen
         onMenuRequested: function(item) { root.showPhotoMenu(root.viewerAsset, item, 0, item.height) }
+        onFaceClicked: function(face, item) { root.showFaceMenu(face, item) }
       }
     }
 
@@ -1851,6 +1857,89 @@ Item {
         return "pending"
       }
     })
+  }
+
+  // ------------------------------------------------------------ faces
+
+  // A face picked in Details or on the photo: it stays framed while its
+  // menu, and then the person picker, are open.
+  function showFaceMenu(face, item) {
+    viewer.selectedFace = face.id
+    var person = face.person
+    var items = []
+    if (person) items.push({ id: "open", label: "Open " + (person.name || "this person"), icon: "person" })
+    items.push({ id: "change", label: person ? "Change person..." : "Who is this?...", icon: "edit" })
+    menu.items = items
+    menu.activated.disconnect(root.menuHandler)
+    root.menuHandler = function(id) {
+      if (id === "open") {
+        root.closeViewer(); root.go("people")
+        root.push({ kind: "person", person: { id: person.id, name: person.name, version: person.version, isHidden: false } })
+      } else if (id === "change") root.changeFacePerson(face)
+    }
+    menu.activated.connect(root.menuHandler)
+    menu.trigger = null
+    menu.openAt(item, 0, item.height)
+  }
+
+  // Move one face to someone else: only this face in this photo changes.
+  function changeFacePerson(face) {
+    service.loadPeople()
+    var was = face.person
+    var asset = root.viewerAsset
+    var items = service.people.filter(function(p) { return p.name && (!was || p.id !== was.id) }).map(function(p) {
+      return { id: p.id, label: p.name, image: root.service.personUrl(p.id, p.version), person: p }
+    })
+    pickerDialog.ask({
+      title: "Who is this?",
+      subtitle: was ? "Only this face moves; " + (was.name || "the unnamed person") + " keeps their other photos." : "Only this face changes.",
+      placeholder: "Find a person, or type a new name",
+      createLabel: "New person",
+      items: items,
+      onPick: function(item) {
+        var params = item.create ? { faceId: face.id, name: item.create } : { faceId: face.id, personId: item.id }
+        root.service.call("face.reassign", params, function(r, e) {
+          if (e) return pickerDialog.finish(e.message)
+          pickerDialog.finish("")
+          root.faceMoved(face, was, r, asset)
+        })
+        return "pending"
+      }
+    })
+  }
+
+  function faceMoved(face, was, now, asset) {
+    root.service.loadPeople(true)
+    if (root.viewerAsset === asset) viewer.reloadDetails()
+    // The person page underneath may have gained or lost this photo.
+    if (root.page && root.page.kind === "person") root.reloadAfterViewer = true
+    var name = now.name || "the new person"
+    toast.show("Moved to " + name, was ? {
+      actionText: "Undo",
+      action: function() {
+        root.service.call("face.reassign", { faceId: face.id, personId: was.id }, function(r, e) {
+          if (e) return root.failed(e)
+          root.service.loadPeople(true)
+          if (root.viewerAsset === asset) viewer.reloadDetails()
+          toast.show("Moved back to " + (was.name || "the unnamed person"))
+        })
+      }
+    } : {})
+  }
+
+  Timer {
+    // A face's menu closed without opening the picker: drop its frame.
+    id: faceMenuClosed
+    interval: 50
+    onTriggered: if (!pickerDialog.opened && !menu.visible) viewer.selectedFace = ""
+  }
+  Connections {
+    target: menu
+    function onClosed() { if (viewer.selectedFace) faceMenuClosed.restart() }
+  }
+  Connections {
+    target: pickerDialog
+    function onOpenedChanged() { if (!pickerDialog.opened && viewer.selectedFace) faceMenuClosed.restart() }
   }
 
   function mergePerson(person) {

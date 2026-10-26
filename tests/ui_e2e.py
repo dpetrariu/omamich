@@ -349,6 +349,9 @@ def main():
         # Alvar was a stranger after all: take the face away from him.
         h.js("app.showFaceMenu(hooks.viewer.faces[1], hooks.info)")
         assert h.value("hooks.menu.items.filter(function(i) { return !i.separator }).map(function(i) { return i.label })")[-1] == "Remove from Alvar..."
+        time.sleep(0.4)
+        # The menu is as wide as its longest row.
+        assert h.value("hooks.menu.contentItem.implicitWidth >= hooks.menu.widest - 0.5") is True, h.value("[hooks.menu.width, hooks.menu.widest]")
         h.js("hooks.menu.activate(hooks.menu.items.map(function(i) { return i.id }).indexOf('remove'))")
         wait_for("asked first", lambda: h.value("hooks.confirm.opened") is True)
         assert h.value("hooks.viewer.selectedFace") == stranger

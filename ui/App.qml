@@ -1869,6 +1869,8 @@ Item {
     var items = []
     if (person) items.push({ id: "open", label: "Open " + (person.name || "this person"), icon: "person" })
     items.push({ id: "change", label: person ? "Change person..." : "Who is this?...", icon: "edit" })
+    items.push({ separator: true })
+    items.push({ id: "remove", label: person ? "Remove from " + (person.name || "this person") + "..." : "Forget this face...", icon: "close", danger: true })
     menu.items = items
     menu.activated.disconnect(root.menuHandler)
     root.menuHandler = function(id) {
@@ -1876,6 +1878,7 @@ Item {
         root.closeViewer(); root.go("people")
         root.push({ kind: "person", person: { id: person.id, name: person.name, version: person.version, isHidden: false } })
       } else if (id === "change") root.changeFacePerson(face)
+      else if (id === "remove") root.removeFace(face)
     }
     menu.activated.connect(root.menuHandler)
     menu.trigger = null
@@ -1908,6 +1911,30 @@ Item {
     })
   }
 
+  // Someone you do not know, or a wrong match: Immich stops tracking the
+  // face. The photo stays.
+  function removeFace(face) {
+    var person = face.person
+    var asset = root.viewerAsset
+    var name = person ? (person.name || "this person") : ""
+    viewer.selectedFace = face.id
+    confirmDialog.ask({
+      title: person ? "Remove this face from " + name + "?" : "Forget this face?",
+      message: (person ? "The photo stays, but " + name + " is no longer shown in it. " : "The photo stays; Immich stops showing this face. ")
+        + "This cannot be undone here; Immich finds the face again only if you rerun face detection.",
+      confirmText: person ? "Remove" : "Forget",
+      onConfirm: function() {
+        root.service.call("face.remove", { faceId: face.id }, function(r, e) {
+          if (e) return root.failed(e)
+          root.service.loadPeople(true)
+          if (root.viewerAsset === asset) viewer.reloadDetails()
+          if (person && root.page && root.page.kind === "person") root.reloadAfterViewer = true
+          toast.show(person ? "Removed from " + name : "Face forgotten")
+        })
+      }
+    })
+  }
+
   function faceMoved(face, was, now, asset) {
     root.service.loadPeople(true)
     if (root.viewerAsset === asset) viewer.reloadDetails()
@@ -1931,7 +1958,7 @@ Item {
     // A face's menu closed without opening the picker: drop its frame.
     id: faceMenuClosed
     interval: 50
-    onTriggered: if (!pickerDialog.opened && !menu.visible) viewer.selectedFace = ""
+    onTriggered: if (!pickerDialog.opened && !confirmDialog.opened && !menu.visible) viewer.selectedFace = ""
   }
   Connections {
     target: menu
@@ -1940,6 +1967,10 @@ Item {
   Connections {
     target: pickerDialog
     function onOpenedChanged() { if (!pickerDialog.opened && viewer.selectedFace) faceMenuClosed.restart() }
+  }
+  Connections {
+    target: confirmDialog
+    function onOpenedChanged() { if (!confirmDialog.opened && viewer.selectedFace) faceMenuClosed.restart() }
   }
 
   function mergePerson(person) {

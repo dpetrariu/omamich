@@ -734,6 +734,16 @@ class Handler(BaseHTTPRequestHandler):
         self.not_found()
 
     def delete(self, path, body):
+        m = re.fullmatch(r"/api/faces/([0-9a-f-]{36})", path)
+        if m:
+            if "force" not in body:
+                return self.reply(400, {"message": ["force must be a boolean value"], "statusCode": 400})
+            face = FACES.get(m.group(1))
+            if not face:
+                return self.reply(400, {"message": "Not found or no face.delete access", "statusCode": 400})
+            move_face(face, None)
+            del FACES[m.group(1)]
+            return self.reply(204, None)
         if path == "/api/assets":
             for asset_id in body["ids"]:
                 if asset_id in ASSETS:

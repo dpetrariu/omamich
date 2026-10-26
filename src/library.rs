@@ -591,6 +591,15 @@ pub async fn face_reassign(app: &App, params: &Value) -> Result<Value> {
     Ok(slim_person(&person))
 }
 
+/// Take a face away from its person (someone you do not know, or a wrong
+/// match): Immich stops tracking it, and the photo stays. Immich's soft
+/// delete, as its own web app uses; it cannot be undone through the API.
+pub async fn face_remove(app: &App, params: &Value) -> Result<Value> {
+    let face = id_param(params, "faceId")?;
+    app.immich.delete(&format!("/api/faces/{face}"), Some(json!({ "force": false }))).await?;
+    Ok(json!(true))
+}
+
 pub async fn person_merge(app: &App, params: &Value) -> Result<Value> {
     let id = id_param(params, "id")?;
     let ids = ids_param(params, "ids")?;

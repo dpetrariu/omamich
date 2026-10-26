@@ -150,6 +150,10 @@ def main():
         expect_error(backend, "face.reassign", {"faceId": ada_face}, "pick a person")
         expect_error(backend, "face.reassign", {"faceId": ada_face, "personId": "../x"}, "")
         expect_error(backend, "face.reassign", {"faceId": "nope", "personId": person}, "")
+        assert backend.call("face.remove", {"faceId": ada_face}) is True
+        assert ada_face not in state(port)["faces"]
+        expect_error(backend, "face.remove", {"faceId": ada_face}, "")
+        expect_error(backend, "face.remove", {"faceId": "../x"}, "")
         print("ok: faces")
         backend.call("person.merge", {"id": "33333333-3333-4333-8333-333333333333", "ids": [person]})
         assert person not in state(port)["people"]

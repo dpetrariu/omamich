@@ -59,6 +59,7 @@ pub async fn dispatch(app: &App, method: &str, params: &Value) -> Result<Value> 
         "person.merge" => lib::person_merge(app, params).await,
         "asset.faces" => lib::asset_faces(app, params).await,
         "face.reassign" => lib::face_reassign(app, params).await,
+        "face.remove" => lib::face_remove(app, params).await,
 
         "explore" => lib::explore(app).await,
         "places.list" => lib::places(app).await,

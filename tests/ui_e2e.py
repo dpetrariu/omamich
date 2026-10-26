@@ -328,7 +328,7 @@ def main():
         alvar = next(k for k, p in state(port)["people"].items() if p["name"] == "Alvar")
         h.js(f"app.showFaceMenu(hooks.viewer.faces[1], hooks.info)")
         assert h.value("hooks.viewer.selectedFace") == stranger
-        assert h.value("hooks.menu.items.map(function(i) { return i.label })") == ["Who is this?..."]
+        assert h.value("hooks.menu.items.filter(function(i) { return !i.separator }).map(function(i) { return i.label })") == ["Who is this?...", "Forget this face..."]
         h.js("hooks.menu.activate(hooks.menu.items.map(function(i) { return i.id }).indexOf('change'))")
         wait_for("the picker", lambda: h.value("hooks.picker.opened") is True)
         h.js("hooks.picker.choose('Alvar')")
@@ -337,7 +337,7 @@ def main():
         # Jenny's face moves to Emma, and Undo moves it back.
         emma = next(k for k, p in state(port)["people"].items() if p["name"] == "Emma")
         h.js("app.showFaceMenu(hooks.viewer.faces[0], hooks.info)")
-        assert h.value("hooks.menu.items.map(function(i) { return i.label })") == ["Open Jenny", "Change person..."]
+        assert h.value("hooks.menu.items.filter(function(i) { return !i.separator }).map(function(i) { return i.label })") == ["Open Jenny", "Change person...", "Remove from Jenny..."]
         h.js("hooks.menu.activate(hooks.menu.items.map(function(i) { return i.id }).indexOf('change'))")
         wait_for("the picker", lambda: h.value("hooks.picker.opened") is True)
         h.js("hooks.picker.choose('Emma')")
@@ -346,10 +346,21 @@ def main():
         h.js("hooks.toast.action()")
         wait_for("Undo gives it back", lambda: state(port)["faces"][jenny_face]["personId"] == person, 10)
         wait_for("the frame is let go", lambda: h.value("hooks.viewer.selectedFace") == "", 5)
+        # Alvar was a stranger after all: take the face away from him.
+        h.js("app.showFaceMenu(hooks.viewer.faces[1], hooks.info)")
+        assert h.value("hooks.menu.items.filter(function(i) { return !i.separator }).map(function(i) { return i.label })")[-1] == "Remove from Alvar..."
+        h.js("hooks.menu.activate(hooks.menu.items.map(function(i) { return i.id }).indexOf('remove'))")
+        wait_for("asked first", lambda: h.value("hooks.confirm.opened") is True)
+        assert h.value("hooks.viewer.selectedFace") == stranger
+        assert stranger in state(port)["faces"]
+        h.js("hooks.confirm.confirm()")
+        wait_for("the face is gone", lambda: stranger not in state(port)["faces"], 10)
+        wait_for("the details follow", lambda: h.value("hooks.info.faceList.map(function(f) { return f.person ? f.person.name : '?' }).join(',')") == "Jenny", 10)
+        wait_for("the frame is let go", lambda: h.value("hooks.viewer.selectedFace") == "", 5)
         h.js("app.setInfo(false)")
         h.nav("back", 1.5)
         h.nav("back")
-        print("ok: face frames, naming a stranger, moving a face and Undo")
+        print("ok: face frames, naming a stranger, moving a face, Undo and removing a face")
 
         # Places, explore, search.
         h.nav("go:places", 2.5)

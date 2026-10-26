@@ -86,7 +86,7 @@ Item {
   }
 
   // Handles for the off-screen UI tests, which drive dialogs directly.
-  readonly property var testHooks: ({ prompt: promptDialog, confirm: confirmDialog, picker: pickerDialog,
+  readonly property var testHooks: ({ menu: menu, prompt: promptDialog, confirm: confirmDialog, picker: pickerDialog,
     share: shareDialog, albumPeople: albumPeople, viewer: viewer, info: infoPanel, toast: toast,
     content: contentLoader, window: window })
 
@@ -447,6 +447,7 @@ Item {
   readonly property bool inTrash: section === "trash" && !page
   readonly property bool inArchive: section === "archive" && !page
   readonly property var albumPage: page && page.kind === "album" ? page.album : null
+  readonly property var personPage: page && page.kind === "person" ? page.person : null
 
   function ids(assets) {
     return assets.map(function(a) { return a.id })
@@ -831,6 +832,19 @@ Item {
     })
   }
 
+  // The person's face thumbnail, cropped by Immich from this photo.
+  function setKeyPhoto(asset) {
+    var person = personPage
+    if (!person) return
+    service.call("person.update", { id: person.id, featureFaceAssetId: asset.id }, function(r, e) {
+      if (e) return root.failed(e)
+      var updated = Object.assign({}, person, r)
+      root.service.patchPerson(updated)
+      root.replacePage({ kind: "person", person: updated })
+      toast.show("Key photo updated" + (person.name ? " for " + person.name : ""))
+    })
+  }
+
   function setAlbumCover(asset) {
     var album = albumPage
     if (!album) return
@@ -881,6 +895,10 @@ Item {
         if (!many) items.push({ id: "cover", label: "Use as album cover", icon: "image" })
         items.push({ id: "removeFromAlbum", label: "Remove from album", icon: "close" })
       }
+      if (personPage && !many) {
+        items.push({ separator: true })
+        items.push({ id: "keyPhoto", label: "Use as " + (personPage.name ? personPage.name + "'s" : "this person's") + " key photo", icon: "person" })
+      }
       items.push({ separator: true })
       items.push({ id: "archive", label: inArchive ? "Unarchive" : "Archive", icon: inArchive ? "unarchive" : "archive", shortcut: "a" })
       items.push({ id: "trash", label: "Move to trash", icon: "trash", shortcut: "d", danger: true })
@@ -893,6 +911,7 @@ Item {
     root.menuHandler = function(id) {
       if (id === "view") root.openViewer(asset)
       else if (id === "cover") root.setAlbumCover(asset)
+      else if (id === "keyPhoto") root.setKeyPhoto(asset)
       else if (id === "removeFromAlbum") root.removeFromAlbum(targets, grid)
       else root.photoAction(id, targets, grid)
     }
@@ -1140,8 +1159,8 @@ Item {
           sourceComponent: {
             var p = root.page
             if (p) {
-              if (p.kind === "album") return albumPage
-              if (p.kind === "person") return personPage
+              if (p.kind === "album") return albumPageView
+              if (p.kind === "person") return personPageView
               if (p.kind === "place") return placePage
               if (p.kind === "tag") return tagPage
               if (p.kind === "search") return searchPage
@@ -1451,7 +1470,7 @@ Item {
     }
   }
   Component {
-    id: albumPage
+    id: albumPageView
     AlbumPage {
       theme: appTheme; service: root.service; zoom: root.zoom
       album: root.page ? root.page.album : null
@@ -1518,7 +1537,7 @@ Item {
     }
   }
   Component {
-    id: personPage
+    id: personPageView
     PersonPage {
       theme: appTheme; service: root.service; zoom: root.zoom
       person: root.page ? root.page.person : null

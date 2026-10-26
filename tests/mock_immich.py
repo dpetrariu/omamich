@@ -422,7 +422,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def person(self, p):
         return {"id": p["id"], "name": p["name"], "birthDate": p["birthDate"], "isHidden": p["isHidden"],
-                "isFavorite": p["isFavorite"], "updatedAt": "2026-01-01T00:00:00Z"}
+                "isFavorite": p["isFavorite"], "updatedAt": "2026-01-01T00:00:%02dZ" % p.get("updated", 0)}
 
     # ------------------------------------------------------------ POST
     def do_POST(self):
@@ -632,6 +632,13 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             person = PEOPLE.setdefault(m.group(1), {"id": m.group(1), "name": "", "isHidden": False, "isFavorite": False,
                                                     "birthDate": None, "assetIds": []})
+            face = body.pop("featureFaceAssetId", None)
+            if face is not None:
+                # Like Immich: only a photo the person is in.
+                if face not in person["assetIds"]:
+                    return self.reply(400, {"message": "Invalid assetId for feature face", "statusCode": 400})
+                person["faceAssetId"] = face
+                person["updated"] = person.get("updated", 0) + 1
             person.update(body)
             return self.reply(200, self.person(person))
         m = re.fullmatch(r"/api/partners/([0-9a-f-]{36})", path)

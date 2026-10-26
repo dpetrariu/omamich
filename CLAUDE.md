@@ -38,6 +38,7 @@ Rust comes from mise: prefix cargo with `mise exec rust@latest cmake@latest --` 
 ## QML pitfalls met here
 
 - A child binding `theme: theme` binds to itself; App's Theme has id `appTheme`.
+- An `id` shadows a property of the same name everywhere in that file: a `Component { id: albumPage }` made the `albumPage` property always set, so every photo menu offered "Use as album cover". Page components are `…PageView`.
 - A `signal xChanged` clashes with property `x`'s change signal and stops the file loading; two functions with one name do too. The UI test catches both because the window never comes up.
 - Name clashes with `QtQuick.Controls`: import it as `QQC`; our popup is `PopupMenu`, our modal is `Sheet`.
 - A binding that can yield `undefined` for a bool leaves the property at its default (`visible` stays `true`): compare with `=== true`.

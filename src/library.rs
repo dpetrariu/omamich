@@ -521,7 +521,19 @@ pub async fn person_update(app: &App, params: &Value) -> Result<Value> {
             }
         }
     }
-    let person = app.immich.put(&format!("/api/people/{id}"), Value::Object(body)).await?;
+    // The key photo: Immich crops the person's face from this photo for
+    // their thumbnail. It must be a photo they are in.
+    let key_photo = str_param(params, "featureFaceAssetId");
+    if !key_photo.is_empty() {
+        body.insert("featureFaceAssetId".into(), json!(require_id(key_photo)?));
+    }
+    let person = app.immich.put(&format!("/api/people/{id}"), Value::Object(body)).await.map_err(|e| {
+        if e.message.to_lowercase().contains("feature face") {
+            Error::invalid("That photo does not show this person's face")
+        } else {
+            e
+        }
+    })?;
     Ok(slim_person(&person))
 }
 

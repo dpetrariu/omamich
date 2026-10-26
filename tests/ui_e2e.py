@@ -294,7 +294,18 @@ def main():
         h.js("app.renamePerson(app.page.person)")
         h.js("hooks.prompt.submitText('Jenny')")
         wait_for("renamed", lambda: state(port)["people"][person]["name"] == "Jenny")
-        print("ok: people, person page and rename")
+        # Right-click a photo of theirs: use it as their key photo.
+        wait_for("their photos", lambda: h.value("app.activeGrid() && app.activeGrid().currentAsset() ? 1 : 0") == 1, 10)
+        photo = h.value("app.activeGrid().currentAsset().id")
+        before = h.value("app.page.person.version")
+        h.js("app.showPhotoMenu(app.activeGrid().currentAsset(), hooks.content, 10, 10)")
+        labels = h.value("hooks.menu.items.map(function(i) { return i.label || '' })")
+        assert "Use as Jenny's key photo" in labels and "Use as album cover" not in labels, labels
+        h.js("app.menuHandler('keyPhoto')")
+        wait_for("the key photo", lambda: state(port)["people"][person].get("faceAssetId") == photo, 10)
+        wait_for("the thumbnail refreshed", lambda: h.value("app.page.person.version") != before, 10)
+        h.nav("back")
+        print("ok: people, person page, rename and key photo")
 
         # Places, explore, search.
         h.nav("go:places", 2.5)

@@ -126,6 +126,9 @@ def main():
         updated = backend.call("person.update", {"id": person, "name": " Ada ", "birthDate": "1990-12-10", "isFavorite": True})
         assert updated["name"] == "Ada" and updated["isFavorite"] is True, updated
         expect_error(backend, "person.update", {"id": person, "birthDate": "10/12/1990"}, "birthday")
+        # A key photo must be one the person is in; Immich refuses others.
+        expect_error(backend, "person.update", {"id": person, "featureFaceAssetId": one}, "does not show this person")
+        expect_error(backend, "person.update", {"id": person, "featureFaceAssetId": "../x"}, "")
         backend.call("person.merge", {"id": "33333333-3333-4333-8333-333333333333", "ids": [person]})
         assert person not in state(port)["people"]
         print("ok: people")

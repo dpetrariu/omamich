@@ -832,17 +832,48 @@ Item {
     })
   }
 
-  // The person's face thumbnail, cropped by Immich from this photo.
+  // The person's face thumbnail, cropped by Immich from this photo. Immich
+  // crops it in a background job after answering, so the picture is
+  // reloaded only once the person's version moves on again (or, if it never
+  // does, after a while anyway); loading it at once would cache the old face.
   function setKeyPhoto(asset) {
     var person = personPage
     if (!person) return
     service.call("person.update", { id: person.id, featureFaceAssetId: asset.id }, function(r, e) {
       if (e) return root.failed(e)
-      var updated = Object.assign({}, person, r)
-      root.service.patchPerson(updated)
-      root.replacePage({ kind: "person", person: updated })
       toast.show("Key photo updated" + (person.name ? " for " + person.name : ""))
+      keyPhotoWait.person = person
+      keyPhotoWait.version = r.version
+      keyPhotoWait.tries = 0
+      keyPhotoWait.restart()
     })
+  }
+
+  function showKeyPhoto(person) {
+    root.service.patchPerson(person)
+    if (root.page && root.page.kind === "person" && root.page.person.id === person.id)
+      root.replacePage({ kind: "person", person: Object.assign({}, root.page.person, person) })
+  }
+
+  Timer {
+    id: keyPhotoWait
+    property var person: null
+    property string version: ""
+    property int tries: 0
+    interval: 1000
+    onTriggered: {
+      var person = keyPhotoWait.person
+      var version = keyPhotoWait.version
+      keyPhotoWait.tries++
+      root.service.call("person.get", { id: person.id }, function(r, e) {
+        if (!root) return
+        if (!e && r.version !== version)
+          return root.showKeyPhoto(Object.assign({}, person, r))
+        if (keyPhotoWait.tries < 15) return keyPhotoWait.restart()
+        // The version never moved: load the picture again regardless.
+        root.showKeyPhoto(Object.assign({}, person, e ? {} : r, { version: version + "k" + Date.now() }))
+      })
+    }
   }
 
   function setAlbumCover(asset) {

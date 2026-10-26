@@ -637,8 +637,15 @@ class Handler(BaseHTTPRequestHandler):
                 # Like Immich: only a photo the person is in.
                 if face not in person["assetIds"]:
                     return self.reply(400, {"message": "Invalid assetId for feature face", "statusCode": 400})
-                person["faceAssetId"] = face
                 person["updated"] = person.get("updated", 0) + 1
+
+                # Like Immich: the face is cropped by a background job a moment
+                # later, which touches the person again.
+                def crop(person=person, face=face):
+                    with LOCK:
+                        person["faceAssetId"] = face
+                        person["updated"] = person.get("updated", 0) + 1
+                threading.Timer(1.0, crop).start()
             person.update(body)
             return self.reply(200, self.person(person))
         m = re.fullmatch(r"/api/partners/([0-9a-f-]{36})", path)

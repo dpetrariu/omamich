@@ -303,7 +303,9 @@ def main():
         assert "Make key photo" in labels and "Use as album cover" not in labels, labels
         h.js("app.menuHandler('keyPhoto')")
         wait_for("the key photo", lambda: state(port)["people"][person].get("faceAssetId") == photo, 10)
-        wait_for("the thumbnail refreshed", lambda: h.value("app.page.person.version") != before, 10)
+        # The picture reloads only after Immich's crop job touched the person.
+        final = "202601010000" + "%02d" % state(port)["people"][person]["updated"]
+        wait_for("the thumbnail refreshed after the crop", lambda: h.value("app.page.person.version") == final, 10)
         h.nav("back")
         print("ok: people, person page, rename and key photo")
 

@@ -304,6 +304,23 @@ def main():
         wait_for("a place lists its photos", lambda: h.value("app.activeGrid() ? app.activeGrid().total : 0") > 0)
         h.nav("go:explore", 2.5)
         h.shot("14-explore")
+        # A sideways swipe over People goes to that row: it stretches past
+        # its start and springs back, and the page stays where it is.
+        ex = "hooks.content.item"
+        row = ex + ".peopleRow"
+        ry = h.value(f"{row}.mapToItem({ex}, 0, 40).y")
+        page_y = h.value(f"{ex}.wheel.flickable.contentY")
+        assert h.value(f"{ex}.wheel.rowAt({ry}) === {row}.rowWheel") is True
+        w = ex + ".wheel"
+        start = h.value(f"{row}.originX - {row}.leftMargin")
+        h.js(f"({w}.handle(0, 0, 0, 0, false, {ry}, 1, 1000), " + ", ".join(f"{w}.handle(0, 0, 60, 1, false, {ry}, 2, {1000 + 16 * (i + 1)})" for i in range(6)) + ")")
+        time.sleep(0.4)
+        stretched = start - h.value(f"{row}.contentX")
+        assert 10 < stretched < 6 * 60 * 1.25, ("the row did not stretch past its start", stretched)
+        h.js(f"{w}.handle(0, 0, 0, 0, false, {ry}, 3, 1500)")
+        time.sleep(1.2)
+        assert abs(h.value(f"{row}.contentX") - start) < 0.5 and h.value(f"{row}.rowWheel.active") is False, "the row did not settle"
+        assert abs(h.value(f"{ex}.wheel.flickable.contentY") - page_y) < 1, "the page moved with a sideways swipe"
         h.nav("search:sunset", 2.5)
         wait_for("search finds the sunset", lambda: h.value("app.activeGrid() ? app.activeGrid().total : 0") == 1)
         h.shot("15-search")

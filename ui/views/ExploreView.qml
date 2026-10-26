@@ -64,24 +64,31 @@ Item {
   readonly property var topPlaces: service.places.slice(0, 16)
   readonly property var suggestions: ["Sunset", "Beach", "Snow", "Mountains", "Food", "Dog", "Cat", "Birthday cake", "City at night", "Forest", "Car", "Flowers"]
 
-  // Momentum scrolling; a sideways swipe or Shift+wheel scrolls the row of
-  // people, places or tags under the pointer.
+  // Momentum scrolling. A sideways swipe or Shift+wheel over the people,
+  // places or tags goes to that row, which glides and stretches on its own.
   WheelScroller {
+    id: pageWheel
     flickable: page
     notch: root.theme.space(320)
-    sideways: function(dx, y) {
+    rowAt: function(y) {
       for (var i = 0; i < column.children.length; i++) {
         var row = column.children[i]
-        if (row.orientation !== ListView.Horizontal || !row.visible) continue
+        if (!row.rowWheel || !row.visible) continue
         var p = row.mapToItem(root, 0, 0)
-        if (y < p.y || y >= p.y + row.height) continue
-        row.cancelFlick()
-        var start = row.originX - row.leftMargin
-        var end = Math.max(start, row.originX + row.contentWidth + row.rightMargin - row.width)
-        row.contentX = Math.max(start, Math.min(end, row.contentX + dx))
-        return
+        if (y >= p.y && y < p.y + row.height) return row.rowWheel
       }
+      return null
     }
+  }
+  property alias wheel: pageWheel
+  property alias peopleRow: peopleRow
+
+  // A row's own sideways scroller: a child of the row itself (not of its
+  // content), fed by the page.
+  component RowWheel: WheelScroller {
+    horizontal: true
+    takesWheel: false
+    notch: root.theme.space(360)
   }
 
   Flickable {
@@ -112,6 +119,9 @@ Item {
         width: parent.width
         height: root.theme.space(124)
         orientation: ListView.Horizontal
+        id: peopleRow
+        readonly property var rowWheel: peopleWheel
+        RowWheel { id: peopleWheel; parent: peopleRow; flickable: peopleRow }
         spacing: root.theme.space(14)
         clip: true
         model: root.topPeople
@@ -155,6 +165,9 @@ Item {
         width: parent.width
         height: root.theme.space(170)
         orientation: ListView.Horizontal
+        id: placesRow
+        readonly property var rowWheel: placesWheel
+        RowWheel { id: placesWheel; parent: placesRow; flickable: placesRow }
         spacing: root.theme.space(12)
         clip: true
         model: root.topPlaces
@@ -197,6 +210,9 @@ Item {
         width: parent.width
         height: root.theme.space(170)
         orientation: ListView.Horizontal
+        id: tagsRow
+        readonly property var rowWheel: tagsWheel
+        RowWheel { id: tagsWheel; parent: tagsRow; flickable: tagsRow }
         spacing: root.theme.space(12)
         clip: true
         model: root.topTags

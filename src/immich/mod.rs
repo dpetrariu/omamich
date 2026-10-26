@@ -40,7 +40,9 @@ impl Immich {
         let http = reqwest::Client::builder()
             .user_agent(concat!("omamich/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(8))
-            .pool_idle_timeout(Duration::from_secs(60))
+            // Immich (Node) closes an idle connection after 5 s; reusing one
+            // it has just closed fails a request with "error sending request".
+            .pool_idle_timeout(Duration::from_secs(4))
             .build()
             .expect("http client");
         Self { http, conn: RwLock::new(Conn::default()) }

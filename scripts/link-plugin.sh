@@ -23,6 +23,11 @@ mkdir -p "$apps"
 install -m 644 "$project_dir/setup/omamich.desktop" "$apps/omamich.desktop"
 # NoDisplay and no default handler: it only adds an "Open with" choice.
 sed "s|OMAMICH_DIR|$project_dir|" "$project_dir/setup/omamich-upload.desktop" > "$apps/omamich-upload.desktop"
+# The launcher icon, by name, from the user icon theme.
+icons="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
+mkdir -p "$icons"
+install -m 644 "$project_dir/ui/assets/icon.svg" "$icons/omamich.svg"
+gtk-update-icon-cache -q -t "${icons%/scalable/apps}" 2>/dev/null || true
 update-desktop-database "$apps" 2>/dev/null || true
 omarchy-shell shell rescanPlugins
 omarchy plugin enable omamich

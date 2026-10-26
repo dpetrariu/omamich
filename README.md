@@ -91,4 +91,6 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit.
 
 ## Credits and licence
 
-Omamich's features follow [Mimick](https://github.com/nicx17/mimick) (GPL-3.0), and its structure and interface principles follow [Omamail](https://github.com/huacnlee/omamail) (MIT). Omamich is licensed under the GNU General Public License v3.0 or later. Not affiliated with Immich.
+Omamich's features follow [Mimick](https://github.com/nicx17/mimick) (GPL-3.0), and its structure and interface principles follow [Omamail](https://github.com/huacnlee/omamail) (MIT). Omamich is licensed under the GNU General Public License v3.0 or later.
+
+The icon (`ui/assets/icon.svg`, and the mark in `ui/lib/Mark.js`) combines the `image-multiple-outline` glyph from [Material Design Icons](https://pictogrammers.com/library/mdi/) (Apache-2.0) with the [Immich logo](https://github.com/immich-app/immich/tree/main/design) from the Immich project. Not affiliated with Immich.

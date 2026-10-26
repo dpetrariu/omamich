@@ -4,7 +4,6 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "components"
-import "lib/Icons.js" as Icons
 
 // One icon and one click. A dot says folder sync is working; the icon turns
 // the urgent colour when sync needs attention. The tooltip says which.
@@ -51,11 +50,9 @@ BarWidget {
 
     iconComponent: Component {
       Item {
-        Text {
+        Mark {
           anchors.centerIn: parent
-          text: Icons.glyph("photos")
-          font.family: Style.font.family
-          font.pixelSize: Style.bar.iconFont
+          size: Style.bar.iconFont
           color: button.attention ? Commons.Color.urgent : root.foreground
         }
         Rectangle {

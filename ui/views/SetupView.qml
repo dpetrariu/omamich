@@ -55,12 +55,10 @@ Item {
     width: Math.min(parent.width - root.theme.space(48), root.theme.space(520))
     spacing: root.theme.space(14)
 
-    Glyph {
+    Mark {
       anchors.horizontalCenter: parent.horizontalCenter
-      name: "logo"
       size: root.theme.display * 2
       color: root.theme.accent
-      font.family: root.theme.font
     }
     Text {
       anchors.horizontalCenter: parent.horizontalCenter

@@ -897,7 +897,7 @@ Item {
       }
       if (personPage && !many) {
         items.push({ separator: true })
-        items.push({ id: "keyPhoto", label: "Use as " + (personPage.name ? personPage.name + "'s" : "this person's") + " key photo", icon: "person" })
+        items.push({ id: "keyPhoto", label: "Make key photo", icon: "person" })
       }
       items.push({ separator: true })
       items.push({ id: "archive", label: inArchive ? "Unarchive" : "Archive", icon: inArchive ? "unarchive" : "archive", shortcut: "a" })

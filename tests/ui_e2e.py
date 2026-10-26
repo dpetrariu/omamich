@@ -300,7 +300,7 @@ def main():
         before = h.value("app.page.person.version")
         h.js("app.showPhotoMenu(app.activeGrid().currentAsset(), hooks.content, 10, 10)")
         labels = h.value("hooks.menu.items.map(function(i) { return i.label || '' })")
-        assert "Use as Jenny's key photo" in labels and "Use as album cover" not in labels, labels
+        assert "Make key photo" in labels and "Use as album cover" not in labels, labels
         h.js("app.menuHandler('keyPhoto')")
         wait_for("the key photo", lambda: state(port)["people"][person].get("faceAssetId") == photo, 10)
         wait_for("the thumbnail refreshed", lambda: h.value("app.page.person.version") != before, 10)

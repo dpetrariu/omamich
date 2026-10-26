@@ -33,6 +33,11 @@ Item {
   property string hoverFace: ""
   property string selectedFace: ""
   property bool showFaces: false
+  // Immich finds a video's faces on one still, its preview frame. Framing a
+  // face on a video pauses it and shows that still, so every box sits on
+  // the picture it was measured on; playing again hides them.
+  readonly property bool facesStill: isVideo && faces.length > 0 && (showFaces || selectedFace !== "" || hoverFace !== "")
+  onFacesStillChanged: if (facesStill && player.playbackState === MediaPlayer.PlayingState) player.pause()
 
   readonly property bool isVideo: !!asset && !asset.isImage
   // A file on this computer: shown from disk; its Immich copy, if any, is
@@ -72,7 +77,6 @@ Item {
       if (!root.asset || root.remoteIdOf(root.asset) !== id) return
       if (!e) root.details = r
     })
-    if (asset.isImage === false) return
     service.call("asset.faces", { id: id }, function(r, e) { if (!root) return;
       if (!root.asset || root.remoteIdOf(root.asset) !== id) return
       root.faces = e ? [] : r
@@ -111,6 +115,13 @@ Item {
   }
 
   function togglePlay() {
+    if (facesStill) {
+      showFaces = false
+      selectedFace = ""
+      hoverFace = ""
+      player.play()
+      return
+    }
     if (isVideo || playingLive) {
       if (player.playbackState === MediaPlayer.PlayingState) player.pause()
       else player.play()
@@ -170,6 +181,18 @@ Item {
       mipmap: true
       scale: root.zoom
       transform: Translate { x: root.panX; y: root.panY }
+    }
+
+    // A video's preview still, under its face frames.
+    Image {
+      id: still
+      anchors.fill: parent
+      z: 1
+      visible: root.facesStill && status === Image.Ready
+      source: root.isVideo && root.remoteId && root.faces.length > 0 ? root.service.thumbUrl(root.remoteId, "preview", root.asset.thumbhash) : ""
+      fillMode: Image.PreserveAspectFit
+      asynchronous: true
+      smooth: true
     }
 
     VideoOutput {
@@ -235,9 +258,10 @@ Item {
   Item {
     id: frames
     anchors.fill: stage
-    visible: !root.isVideo && !root.playingLive
-    readonly property real pw: preview.paintedWidth > 0 ? preview.paintedWidth : placeholder.width
-    readonly property real ph: preview.paintedHeight > 0 ? preview.paintedHeight : placeholder.height
+    visible: root.isVideo ? still.visible : !root.playingLive
+    readonly property Image shown: root.isVideo ? still : preview
+    readonly property real pw: shown.paintedWidth > 0 ? shown.paintedWidth : placeholder.width
+    readonly property real ph: shown.paintedHeight > 0 ? shown.paintedHeight : placeholder.height
     function sx(f) { return width / 2 + root.panX + (Math.max(0, Math.min(1, f)) - 0.5) * pw * root.zoom }
     function sy(f) { return height / 2 + root.panY + (Math.max(0, Math.min(1, f)) - 0.5) * ph * root.zoom }
 
@@ -501,6 +525,23 @@ Item {
     }
   }
 
+  Rectangle {
+    visible: still.visible
+    anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: root.theme.space(64) }
+    width: stillNote.implicitWidth + root.theme.space(18)
+    height: stillNote.implicitHeight + root.theme.space(8)
+    radius: root.theme.radius
+    color: Qt.rgba(0, 0, 0, 0.6)
+    Text {
+      id: stillNote
+      anchors.centerIn: parent
+      text: "Faces were found in this frame  ·  space plays on"
+      color: "white"
+      font.family: root.theme.font
+      font.pixelSize: root.theme.small
+    }
+  }
+
   function clock(ms) {
     var s = Math.floor(Number(ms || 0) / 1000)
     var m = Math.floor(s / 60)
@@ -518,7 +559,7 @@ Item {
 
   Text {
     anchors.centerIn: parent
-    visible: root.isVideo && root.videoError !== ""
+    visible: root.isVideo && root.videoError !== "" && !still.visible
     text: "This video could not be played"
     color: "white"
     font.family: root.theme.font

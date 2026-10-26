@@ -360,10 +360,34 @@ def main():
         wait_for("the face is gone", lambda: stranger not in state(port)["faces"], 10)
         wait_for("the details follow", lambda: h.value("hooks.info.faceList.map(function(f) { return f.person ? f.person.name : '?' }).join(',')") == "Jenny", 10)
         wait_for("the frame is let go", lambda: h.value("hooks.viewer.selectedFace") == "", 5)
+        # A video: its faces were found on its preview still. Framing them
+        # pauses the video and shows that still; playing hides them again.
+        video = next(k for k, a in state(port)["assets"].items() if a["name"].endswith(".MP4"))
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/_face", method="POST", headers={"x-api-key": KEY},
+                                     data=json.dumps({"assetId": video, "personId": person, "slot": 1}).encode())
+        video_face = json.load(urllib.request.urlopen(req))["id"]
+        h.js(f"app.openViewer({{ id: '{video}', isImage: false, ratio: 1.5, thumbhash: null, fileCreatedAt: '2026-10-01T10:00:00' }})")
+        count = sum(1 for f in state(port)["faces"].values() if f["assetId"] == video)
+        wait_for("the video's faces", lambda: h.value("hooks.viewer.faces.length") == count, 10)
+        mine = h.value(f"hooks.viewer.faces.map(function(f) {{ return f.id }}).indexOf('{video_face}')")
+        assert h.value("hooks.viewer.facesStill") is False
+        h.js(f"hooks.info.faceHovered('{video_face}')")
+        wait_for("the still with its frame", lambda: h.value("hooks.viewer.facesStill") is True, 5)
+        h.js("hooks.info.faceHovered('')")
+        h.key("faces", 1.0)
+        assert h.value("hooks.viewer.facesStill") is True
+        h.shot("12d-video-faces")
+        h.js(f"app.showFaceMenu(hooks.viewer.faces[{mine}], hooks.info)")
+        h.js("hooks.menu.activate(hooks.menu.items.map(function(i) { return i.id }).indexOf('change'))")
+        wait_for("the picker", lambda: h.value("hooks.picker.opened") is True)
+        h.js("hooks.picker.choose('Emma')")
+        wait_for("the video's face is Emma's", lambda: state(port)["faces"][video_face]["personId"] == emma, 10)
+        h.key("playPause", 0.5)
+        assert h.value("hooks.viewer.facesStill") is False and h.value("hooks.viewer.showFaces") is False
         h.js("app.setInfo(false)")
         h.nav("back", 1.5)
         h.nav("back")
-        print("ok: face frames, naming a stranger, moving a face, Undo and removing a face")
+        print("ok: face frames, naming a stranger, moving a face, Undo, removing a face, and faces on a video")
 
         # Places, explore, search.
         h.nav("go:places", 2.5)

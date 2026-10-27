@@ -43,6 +43,14 @@ impl Immich {
             // Immich (Node) closes an idle connection after 5 s; reusing one
             // it has just closed fails a request with "error sending request".
             .pool_idle_timeout(Duration::from_secs(4))
+            // reqwest drops Authorization on a redirect to another host, but
+            // not x-api-key: follow only redirects that stay on the server.
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                match attempt.previous().last() {
+                    Some(from) if attempt.previous().len() < 5 && same_server(from, attempt.url()) => attempt.follow(),
+                    _ => attempt.stop(),
+                }
+            }))
             .build()
             .expect("http client");
         Self { http, conn: RwLock::new(Conn::default()) }
@@ -294,6 +302,10 @@ pub fn status_error(status: StatusCode, body: &str) -> Error {
         ),
         StatusCode::NOT_FOUND => Error::new(error::NOT_FOUND, detail.unwrap_or_else(|| "Not found on the server".into())),
         StatusCode::PAYLOAD_TOO_LARGE => Error::new(error::SERVER, "Immich rejected the file as too large"),
+        s if s.is_redirection() => Error::new(
+            error::NETWORK,
+            "The server sent Omamich to another address, which does not get your API key. Put that address in Settings",
+        ),
         s if s.is_client_error() => Error::new(
             error::INVALID_PARAMS,
             detail.unwrap_or_else(|| format!("Immich refused the request ({})", s.as_u16())),
@@ -313,6 +325,12 @@ pub fn network_error(err: &reqwest::Error) -> Error {
     } else {
         Error::new(error::NETWORK, format!("Network problem: {err}"))
     }
+}
+
+/// A redirect keeps the key only on the same host and never drops from https
+/// to http (http to https, as a reverse proxy does, is fine).
+fn same_server(from: &reqwest::Url, to: &reqwest::Url) -> bool {
+    from.host_str() == to.host_str() && !(from.scheme() == "https" && to.scheme() != "https")
 }
 
 /// Percent-encode one query value.
@@ -336,6 +354,16 @@ pub fn require_id(id: &str) -> Result<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn redirects_keep_the_key_on_the_server() {
+        let url = |s: &str| reqwest::Url::parse(s).unwrap();
+        assert!(same_server(&url("http://192.168.1.10:2283/api/x"), &url("http://192.168.1.10:2283/api/y")));
+        assert!(same_server(&url("http://photos.home/api/x"), &url("https://photos.home/api/x")));
+        assert!(!same_server(&url("https://photos.home/api/x"), &url("http://photos.home/api/x")));
+        assert!(!same_server(&url("http://192.168.1.10:2283/api/x"), &url("https://evil.example/api/x")));
+        assert!(!same_server(&url("https://photos.example/api/x"), &url("https://photos.example.evil/api/x")));
+    }
 
     #[test]
     fn validates_ids() {

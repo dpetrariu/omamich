@@ -27,6 +27,8 @@ from urllib.parse import parse_qs, unquote
 
 KEY = "testkey-0123456789"
 LOCK = threading.Lock()
+REDIRECT = {"to": None}   # tests: answer every API request with a redirect there
+KEY_HOSTS = set()         # every Host an API key was sent to
 # Faces Immich found: id -> {assetId, personId (None when not recognised), box}.
 FACES = {}
 ME = "11111111-1111-4111-8111-111111111111"
@@ -349,6 +351,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length) if length else b""
 
     def authed(self):
+        if self.headers.get("x-api-key"):
+            KEY_HOSTS.add(self.headers.get("Host", ""))
         if self.headers.get("x-api-key") != KEY:
             self.reply(401, {"message": "Invalid API key"})
             return False
@@ -367,6 +371,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {"major": 3, "minor": 3, "patch": 1})
         if path == "/_state":
             return self.state()
+        if path == "/_redirect":
+            # Tests: send every API request to another address from now on.
+            REDIRECT["to"] = q.get("to") or None
+            return self.reply(200, {"to": REDIRECT["to"]})
+        if REDIRECT["to"] and path.startswith("/api/"):
+            self.send_response(302)
+            self.send_header("Location", REDIRECT["to"] + self.path)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if not self.authed():
             return
         with LOCK:
@@ -387,6 +401,7 @@ class Handler(BaseHTTPRequestHandler):
                 "partners": PARTNERS,
                 "faces": FACES,
                 "log": LOG,
+                "keyHosts": sorted(KEY_HOSTS),
             })
 
     def get(self, path, query, q):

@@ -50,6 +50,17 @@ def main():
         assets = wait_for("two photos in the mock", lambda: (lambda a: a if len(a) == 2 else None)(state(port)["assets"]))
         one, two = sorted(assets, key=lambda k: assets[k]["name"])
 
+        # A redirect to another host never carries the key along.
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/_redirect?to=http://localhost:{port}")
+        try:
+            backend.call("server.overview")
+        except RuntimeError:
+            pass
+        expect_error(backend, "asset.albums", {"id": one}, "another address")
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/_redirect?to=")
+        assert state(port)["keyHosts"] == [f"127.0.0.1:{port}"], state(port)["keyHosts"]
+        print("ok: the key does not follow a redirect to another host")
+
         # Photos
         backend.call("asset.update", {"ids": [one, two], "isFavorite": True})
         backend.call("asset.update", {"ids": [one], "visibility": "archive", "rating": 4})

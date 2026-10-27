@@ -271,7 +271,8 @@ pub async fn diagnostics(app: &App, params: &Value) -> Result<Value> {
         d => crate::paths::expand_home(d),
     };
     let dir = files::unique_path(&base, &format!("omamich-diagnostics-{}", chrono::Local::now().format("%Y%m%d-%H%M%S")));
-    tokio::fs::create_dir_all(&dir).await?;
+    std::fs::create_dir_all(&base)?;
+    files::make_private_dir(&dir)?;
     let write = |name: &str, text: String| std::fs::write(dir.join(name), text);
     write("summary.txt", summary)?;
     write("config.redacted.json", serde_json::to_string_pretty(&config)?)?;

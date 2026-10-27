@@ -16,6 +16,9 @@ Item {
   property bool testing: false
   property string error: ""
   property var cache: null
+  // For the UI test: the away address, and whether it is called out as unencrypted.
+  property alias awayAddress: wan.text
+  readonly property bool warnsUnencrypted: awayWarning.visible
 
   signal closed()
   signal toast(string text, string tone)
@@ -105,9 +108,11 @@ Item {
       }
       Text { text: "Home address (LAN)"; color: root.theme.dim; font.family: root.theme.font; font.pixelSize: root.theme.small }
       TextField { id: lan; width: parent.width; placeholderText: "http://192.168.1.10:2283"; font.family: root.theme.font; font.pixelSize: root.theme.body }
+      Text { visible: Format.plainOverInternet(lan.text); width: parent.width; wrapMode: Text.Wrap; text: "Not encrypted: with http:// your API key, which can change your whole library, and your photos cross the internet readable by anyone on the way. Use an https:// address when away from home."; textFormat: Text.PlainText; color: root.theme.urgent; font.family: root.theme.font; font.pixelSize: root.theme.small }
       Text { visible: !!root.test && !!root.test.lan; text: root.result(root.test ? root.test.lan : null); color: root.test && root.test.lan && root.test.lan.ok ? root.theme.accent : root.theme.urgent; font.family: root.theme.font; font.pixelSize: root.theme.small }
       Text { text: "Away address (optional)"; color: root.theme.dim; font.family: root.theme.font; font.pixelSize: root.theme.small }
       TextField { id: wan; width: parent.width; placeholderText: "https://photos.example.com"; font.family: root.theme.font; font.pixelSize: root.theme.body }
+      Text { id: awayWarning; visible: Format.plainOverInternet(wan.text); width: parent.width; wrapMode: Text.Wrap; text: "Not encrypted: with http:// your API key, which can change your whole library, and your photos cross the internet readable by anyone on the way. Use an https:// address when away from home."; textFormat: Text.PlainText; color: root.theme.urgent; font.family: root.theme.font; font.pixelSize: root.theme.small }
       Text { visible: !!root.test && !!root.test.wan; text: root.result(root.test ? root.test.wan : null); color: root.test && root.test.wan && root.test.wan.ok ? root.theme.accent : root.theme.urgent; font.family: root.theme.font; font.pixelSize: root.theme.small }
       Text { text: "API key"; color: root.theme.dim; font.family: root.theme.font; font.pixelSize: root.theme.small }
       TextField {
@@ -119,6 +124,7 @@ Item {
         font.pixelSize: root.theme.body
       }
       Text {
+        textFormat: Text.PlainText
         visible: root.error !== ""
         width: parent.width
         wrapMode: Text.Wrap
@@ -145,6 +151,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: !!root.service.overview && !!root.service.overview.storage && !!root.service.overview.storage.diskSize
         width: parent.width
         wrapMode: Text.Wrap
@@ -159,6 +166,7 @@ Item {
 
       SectionTitle { theme: root.theme; text: "Thumbnail cache" }
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         wrapMode: Text.Wrap
         text: root.cache ? Format.bytes(root.cache.bytes) + " of " + Format.bytes(root.cache.capMb * 1024 * 1024) + " used. The oldest thumbnails go first when the cache is full." : "…"
@@ -190,6 +198,7 @@ Item {
 
       SectionTitle { theme: root.theme; text: "Keyboard" }
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         wrapMode: Text.Wrap
         text: "Press ? in the window for every shortcut. To open Omamich from anywhere, add to ~/.config/hypr/bindings.lua:\n\no.bind(\"SUPER + SHIFT + I\", \"Omamich\", \"omarchy shell shell toggle dpetrariu.omamich '{}'\")"
@@ -200,6 +209,7 @@ Item {
 
       SectionTitle { theme: root.theme; text: "Account" }
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         wrapMode: Text.Wrap
         text: root.service.user ? (root.service.user.name + " <" + root.service.user.email + ">" + (root.service.user.isAdmin ? "  ·  admin" : "")) : "Not connected"

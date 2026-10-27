@@ -158,6 +158,23 @@ pub fn safe_file_name(name: &str) -> String {
     if cleaned.is_empty() { "photo".to_string() } else { cleaned.chars().take(200).collect() }
 }
 
+/// A folder Omamich has to make, open only to the user: it fills with
+/// photos (or a diagnostics bundle naming them). One that is already there,
+/// chosen and perhaps shared on purpose, is left as it is.
+pub fn make_private_dir(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    if dir.try_exists()? {
+        return Ok(());
+    }
+    if let Some(parent) = dir.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    match std::fs::DirBuilder::new().mode(0o700).create(dir) {
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        other => other,
+    }
+}
+
 /// `name.jpg`, then `name (1).jpg`, … — the first that does not exist yet.
 pub fn unique_path(dir: &Path, name: &str) -> PathBuf {
     let candidate = dir.join(name);
@@ -269,6 +286,21 @@ pub fn in_quiet_hours(start: &str, end: &str, now_minutes: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folders_omamich_makes_are_private_and_chosen_ones_are_left_alone() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let dir = tempfile::tempdir().unwrap();
+        let made = dir.path().join("Pictures/Immich");
+        make_private_dir(&made).unwrap();
+        assert_eq!(mode(&made), 0o700);
+        let chosen = dir.path().join("Shared");
+        std::fs::create_dir(&chosen).unwrap();
+        std::fs::set_permissions(&chosen, std::fs::Permissions::from_mode(0o755)).unwrap();
+        make_private_dir(&chosen).unwrap();
+        assert_eq!(mode(&chosen), 0o755);
+    }
 
     fn folder() -> WatchFolder {
         WatchFolder { path: "/p".into(), ..Default::default() }

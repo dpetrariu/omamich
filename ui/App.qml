@@ -88,7 +88,8 @@ Item {
   // Handles for the off-screen UI tests, which drive dialogs directly.
   readonly property var testHooks: ({ menu: menu, prompt: promptDialog, confirm: confirmDialog, picker: pickerDialog,
     share: shareDialog, albumPeople: albumPeople, viewer: viewer, info: infoPanel, toast: toast,
-    content: contentLoader, window: window })
+    content: contentLoader, settings: settingsLoader, window: window,
+    clipboard: function() { return Quickshell.clipboardText } })
 
   function requestClose() {
     if (shell && typeof shell.hide === "function") shell.hide(pluginId)
@@ -764,8 +765,11 @@ Item {
     shareDialog.ask({ albumId: album.id, title: "Share “" + album.albumName + "”" })
   }
 
+  // Set in the shell, not by running wl-copy: a program's arguments are
+  // readable by every account on the machine, and wl-copy keeps running
+  // with them, so a share link would stay there for anyone to open.
   function copy(text) {
-    Quickshell.execDetached(["wl-copy", "--", text])
+    Quickshell.clipboardText = String(text)
   }
 
   function download(assets) {
@@ -1215,6 +1219,7 @@ Item {
         }
 
         Loader {
+          id: settingsLoader
           anchors.fill: parent
           active: root.settingsOpen && root.configured
           sourceComponent: SettingsView {

@@ -144,4 +144,14 @@ test("wire frames", () => {
   assert.strictEqual(Wire.parse("not json"), null)
 })
 
+test("an http:// address is called out only when it crosses the internet", () => {
+  for (const home of ["http://192.168.1.10:2283", "http://10.0.0.5", "http://172.20.1.1:2283", "http://127.0.0.1:2283",
+    "http://nas:2283", "http://nas.local:2283", "http://jellyfin.home.arpa", "http://100.101.102.103:2283",
+    "http://media.tail1234.ts.net", "http://[::1]:2283", "http://[fd00::5]:2283", "https://tv.example.com", "", "192.168.1.10", "nas:2283"])
+    assert.strictEqual(Format.plainOverInternet(home), false, home)
+  for (const away of ["http://tv.example.com", "HTTP://tv.example.com:2283/jellyfin", "http://203.0.113.7:2283",
+    "http://172.32.0.1", "http://[2001:db8::1]:2283", "http://tv.example.com.", "tv.example.com:2283"])
+    assert.strictEqual(Format.plainOverInternet(away), true, away)
+})
+
 console.log(passed + " UI logic tests passed")

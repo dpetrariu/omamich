@@ -280,6 +280,8 @@ def main():
         h.js("hooks.share.create()")
         wait_for("a link is made", lambda: h.value("hooks.share.created ? hooks.share.created.url : ''").startswith("http://127.0.0.1"))
         h.shot("10-share-link")
+        # Copied inside the shell: no wl-copy holding the link in its arguments.
+        assert h.value("hooks.clipboard()") == h.value("hooks.share.created.url"), "the link is on the clipboard"
         h.js("hooks.share.close()")
         print("ok: tag and shared link")
 
@@ -594,6 +596,14 @@ def main():
             h.shot("18-" + section)
         h.nav("settings", 2)
         h.shot("19-settings")
+        # An http:// address across the internet is called out; a home one is not.
+        h.js("hooks.settings.item.awayAddress = 'http://192.168.1.20:2283'")
+        time.sleep(0.3)
+        assert h.value("hooks.settings.item.warnsUnencrypted") is False
+        h.js("hooks.settings.item.awayAddress = 'http://photos.example.com'")
+        time.sleep(0.3)
+        assert h.value("hooks.settings.item.warnsUnencrypted") is True
+        h.shot("19b-settings-unencrypted")
         h.nav("settings", 1)
         h.nav("help", 1)
         assert h.value("app.keyContext") == "dialog", "the shortcut sheet must block photo keys"

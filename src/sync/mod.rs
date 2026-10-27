@@ -1006,7 +1006,7 @@ impl Engine {
             if !records.is_empty() || !parent_ok {
                 return Err(Error::invalid("The folder is missing; is its drive mounted?"));
             }
-            tokio::fs::create_dir_all(&dir).await?;
+            files::make_private_dir(&dir)?;
         } else if !records.is_empty() && records.iter().all(|r| !Path::new(&r.path).exists()) && records.len() > 3 {
             return Err(Error::invalid("None of the downloaded files are in the folder; is its drive mounted?"));
         }

@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Ui
 import "../components"
+import "../lib/Format.js" as Format
 
 // First run: the server address and an API key, or both taken over from
 // Mimick in one click.
@@ -92,6 +93,7 @@ Item {
         width: parent.width - root.theme.space(20)
         spacing: root.theme.space(12)
         Text {
+          textFormat: Text.PlainText
           width: parent.width - useButton.width - root.theme.space(12)
           anchors.verticalCenter: parent.verticalCenter
           wrapMode: Text.Wrap
@@ -122,6 +124,16 @@ Item {
       font.pixelSize: root.theme.body
       onAccepted: key.forceActiveFocus()
     }
+    Text {
+      visible: Format.plainOverInternet(url.text)
+      width: parent.width
+      wrapMode: Text.Wrap
+      text: "Not encrypted: with http:// your API key, which can change your whole library, and your photos cross the internet readable by anyone on the way. Use an https:// address when away from home."
+      textFormat: Text.PlainText
+      color: root.theme.urgent
+      font.family: root.theme.font
+      font.pixelSize: root.theme.small
+    }
     Text { text: "API key"; color: root.theme.dim; font.family: root.theme.font; font.pixelSize: root.theme.small }
     TextField {
       id: key
@@ -133,6 +145,7 @@ Item {
       onAccepted: root.save()
     }
     Text {
+      textFormat: Text.PlainText
       visible: root.error !== ""
       width: parent.width
       wrapMode: Text.Wrap

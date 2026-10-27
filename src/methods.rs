@@ -318,7 +318,7 @@ async fn sync_folder_save(app: &App, params: &Value) -> Result<Value> {
         settings.sync.clone()
     };
     if !path.exists() {
-        std::fs::create_dir_all(&path)?;
+        crate::sync::files::make_private_dir(&path)?;
     }
     app.sync.reload(next_sync);
     settings_get(app).await

@@ -251,6 +251,7 @@ Item {
             radius: root.theme.radius
             color: Qt.rgba(0, 0, 0, 0.6)
             Text {
+              textFormat: Text.PlainText
               id: badge
               anchors.centerIn: parent
               text: t.fileState === "inTrash" ? "in the Immich trash" : "in Immich"
@@ -286,6 +287,7 @@ Item {
   }
 
   Text {
+    textFormat: Text.PlainText
     anchors.centerIn: grid
     visible: !root.loading && root.items.length === 0
     text: root.error || "There are no photos or videos among these files"
@@ -300,6 +302,7 @@ Item {
     height: root.theme.space(56)
     Rectangle { width: parent.width; height: root.theme.borderWidth; color: root.theme.border }
     Text {
+      textFormat: Text.PlainText
       anchors.left: parent.left
       anchors.leftMargin: root.theme.space(18)
       anchors.verticalCenter: parent.verticalCenter

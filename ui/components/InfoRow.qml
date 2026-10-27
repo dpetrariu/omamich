@@ -68,6 +68,7 @@ Item {
   }
 
   Text {
+    textFormat: Text.PlainText
     id: linkText
     anchors.right: parent.right
     y: root.theme.space(2)

@@ -125,6 +125,7 @@ Item {
             }
 
             Text {
+              textFormat: Text.PlainText
               visible: root.collapsed && root.showNumbers && entry.index < 10
               anchors.right: parent.right
               anchors.top: parent.top

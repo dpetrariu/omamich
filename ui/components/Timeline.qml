@@ -817,6 +817,7 @@ Item {
         Item {
           Component.onCompleted: if (root.hasMore) root.loadPage()
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: root.loading._list === true ? "Loading more…" : ""
             color: root.theme.dim

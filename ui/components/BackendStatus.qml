@@ -24,6 +24,7 @@ Rectangle {
       font.family: root.theme.font
     }
     Text {
+      textFormat: Text.PlainText
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.Wrap
@@ -36,6 +37,7 @@ Rectangle {
       font.pixelSize: root.theme.title
     }
     TextEdit {
+      textFormat: Text.PlainText
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       readOnly: true

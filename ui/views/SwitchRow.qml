@@ -28,6 +28,7 @@ Item {
     anchors.leftMargin: root.theme.space(10)
     anchors.right: parent.right
     Text {
+      textFormat: Text.PlainText
       width: parent.width
       wrapMode: Text.Wrap
       text: root.text
@@ -36,6 +37,7 @@ Item {
       font.pixelSize: root.theme.small
     }
     Text {
+      textFormat: Text.PlainText
       visible: root.detail !== ""
       width: parent.width
       wrapMode: Text.Wrap

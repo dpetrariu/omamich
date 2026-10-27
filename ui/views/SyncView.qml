@@ -94,6 +94,7 @@ Item {
               RotationAnimation on rotation { running: root.service.syncBusy; from: 0; to: 360; duration: 1400; loops: Animation.Infinite }
             }
             Text {
+              textFormat: Text.PlainText
               text: root.service.syncSummary
               color: root.theme.foreground
               font.family: root.theme.font
@@ -102,6 +103,7 @@ Item {
             }
           }
           Text {
+            textFormat: Text.PlainText
             text: [root.status.uploaded ? Format.count(root.status.uploaded, "upload") : "",
               root.status.duplicates ? Format.count(root.status.duplicates, "file") + " already in Immich" : "",
               root.status.downloaded ? Format.count(root.status.downloaded, "download") : "",
@@ -111,6 +113,7 @@ Item {
             font.pixelSize: root.theme.small
           }
           Text {
+            textFormat: Text.PlainText
             visible: !!root.status.lastError
             width: parent.width
             wrapMode: Text.Wrap
@@ -446,6 +449,7 @@ Item {
             font.pixelSize: root.theme.small
           }
           Text {
+            textFormat: Text.PlainText
             text: Format.ago(modelData.at)
             color: root.theme.dim
             font.family: root.theme.font

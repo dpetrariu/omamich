@@ -181,6 +181,7 @@ Item {
 
       // Description
       QQC.TextArea {
+        textFormat: Text.PlainText
         id: description
         visible: !!root.details
         width: parent.width

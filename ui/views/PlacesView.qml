@@ -107,6 +107,7 @@ Item {
   }
 
   Text {
+    textFormat: Text.PlainText
     anchors.centerIn: parent
     visible: !root.service.placesLoading && root.places.length === 0
     text: root.service.placesError || "No photos have a place yet"

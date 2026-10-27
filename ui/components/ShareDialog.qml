@@ -143,6 +143,7 @@ Sheet {
     }
 
     Text {
+      textFormat: Text.PlainText
       visible: root.error !== ""
       width: parent.width
       text: root.error

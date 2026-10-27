@@ -484,6 +484,7 @@ Item {
         onClicked: root.togglePlay()
       }
       Text {
+        textFormat: Text.PlainText
         id: timeText
         anchors.left: playButton.right
         anchors.leftMargin: root.theme.space(6)
@@ -515,6 +516,7 @@ Item {
       radius: root.theme.radius
       color: Qt.rgba(0, 0, 0, 0.55)
       Text {
+        textFormat: Text.PlainText
         id: zoomText
         anchors.centerIn: parent
         text: Math.round(root.zoom * 100) + "%" + (full.ready ? "" : (root.zoom > 1.2 ? "  · loading full size" : ""))

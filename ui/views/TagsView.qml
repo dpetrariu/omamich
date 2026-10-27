@@ -187,6 +187,7 @@ Item {
         font.pixelSize: root.theme.body
       }
       Text {
+        textFormat: Text.PlainText
         id: count
         anchors.right: buttons.visible ? buttons.left : parent.right
         anchors.rightMargin: root.theme.space(12)
@@ -248,6 +249,7 @@ Item {
   }
 
   Text {
+    textFormat: Text.PlainText
     anchors.centerIn: parent
     visible: !root.service.tagsLoading && root.rows.length === 0
     text: root.query ? "No tag matches “" + filter.text + "”" : "No tags yet. Press t on a photo to tag it."

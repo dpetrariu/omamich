@@ -127,6 +127,7 @@ Item {
   }
 
   Text {
+    textFormat: Text.PlainText
     anchors.centerIn: parent
     visible: !root.service.peopleLoading && root.people.length === 0
     text: root.service.peopleError || (filter.text ? "Nobody called “" + filter.text + "”" : "Immich has not recognised any faces yet")

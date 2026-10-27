@@ -111,6 +111,7 @@ Rectangle {
     }
 
     Text {
+      textFormat: Text.PlainText
       text: root.perSubfolder ? "Album for files directly in the folder (optional)" : "Album (optional)"
       color: root.theme.dim
       font.family: root.theme.font
@@ -132,6 +133,7 @@ Rectangle {
       TextButton { theme: root.theme; text: "Both ways"; icon: "sync"; fontSize: root.theme.small; enabled: root.hasAlbum; selected: root.hasAlbum && root.method === "full"; onClicked: root.method = "full" }
     }
     Text {
+      textFormat: Text.PlainText
       width: parent.width
       wrapMode: Text.Wrap
       text: root.perSubfolder ? "Each subfolder's photos go into an album named after it" + (albumField.text.trim() ? "; loose files go into “" + albumField.text.trim() + "”." : "; loose files go into an album named after this folder.")
@@ -181,6 +183,7 @@ Rectangle {
     SwitchRow { theme: root.theme; checked: root.enabledFolder; text: "Sync this folder"; onToggled: root.enabledFolder = !root.enabledFolder }
 
     Text {
+      textFormat: Text.PlainText
       visible: root.error !== ""
       width: parent.width
       wrapMode: Text.Wrap

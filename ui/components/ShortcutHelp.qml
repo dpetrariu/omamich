@@ -44,6 +44,7 @@ Item {
           width: root.theme.space(440)
           spacing: root.theme.space(6)
           Text {
+            textFormat: Text.PlainText
             text: modelData.title
             color: root.theme.accent
             font.family: root.theme.font
@@ -56,6 +57,7 @@ Item {
               required property var modelData
               spacing: root.theme.space(12)
               Text {
+                textFormat: Text.PlainText
                 width: root.theme.space(150)
                 horizontalAlignment: Text.AlignRight
                 text: modelData.keys
@@ -65,6 +67,7 @@ Item {
                 elide: Text.ElideLeft
               }
               Text {
+                textFormat: Text.PlainText
                 width: root.theme.space(270)
                 text: modelData.label
                 color: root.theme.dim

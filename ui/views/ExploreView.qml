@@ -151,6 +151,7 @@ Item {
           MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.personOpened(modelData) }
         }
         Text {
+          textFormat: Text.PlainText
           visible: parent.count === 0
           text: root.service.peopleLoading ? "Loading people…" : "Name people in People and they appear here."
           color: root.theme.dim
@@ -196,6 +197,7 @@ Item {
           MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.placeOpened(modelData) }
         }
         Text {
+          textFormat: Text.PlainText
           visible: parent.count === 0
           text: root.service.placesLoading ? "Loading places…" : "No places yet."
           color: root.theme.dim
@@ -284,6 +286,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: root.error !== ""
         text: root.error
         color: root.theme.urgent

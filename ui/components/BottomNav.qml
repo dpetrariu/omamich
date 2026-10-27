@@ -53,6 +53,7 @@ Item {
             font.family: root.theme.font
           }
           Text {
+            textFormat: Text.PlainText
             anchors.horizontalCenter: parent.horizontalCenter
             text: tab.modelData.label
             color: tab.active ? root.theme.foreground : root.theme.dim

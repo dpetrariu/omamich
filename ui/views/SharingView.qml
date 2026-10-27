@@ -92,6 +92,7 @@ Item {
 
       SectionTitle { theme: root.theme; text: "Shared links" }
       Text {
+        textFormat: Text.PlainText
         visible: root.links.length === 0
         text: root.loading ? "Loading…" : (root.error || "No links yet. Press s on a photo, or Share on an album, to make one.")
         color: root.error ? root.theme.urgent : root.theme.dim

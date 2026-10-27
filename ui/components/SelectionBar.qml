@@ -27,6 +27,7 @@ Rectangle {
     spacing: root.theme.space(2)
     IconButton { theme: root.theme; icon: "close"; tooltip: "Clear the selection (Esc)"; onClicked: root.action("clear") }
     Text {
+      textFormat: Text.PlainText
       anchors.verticalCenter: parent.verticalCenter
       text: root.grid ? root.grid.selectedCount + " selected" : ""
       color: root.theme.foreground

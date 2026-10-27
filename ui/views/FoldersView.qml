@@ -160,6 +160,7 @@ Item {
   }
 
   Text {
+    textFormat: Text.PlainText
     anchors.centerIn: parent
     visible: !root.loading && root.paths.length === 0
     text: root.error || "Immich has no folder information for this library"

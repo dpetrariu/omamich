@@ -216,6 +216,7 @@ Sheet {
     }
 
     Text {
+      textFormat: Text.PlainText
       visible: root.mine && !root.loading && root.candidates.length === 0
       width: parent.width
       wrapMode: Text.Wrap
@@ -226,6 +227,7 @@ Sheet {
     }
 
     Text {
+      textFormat: Text.PlainText
       visible: root.error !== ""
       width: parent.width
       wrapMode: Text.Wrap

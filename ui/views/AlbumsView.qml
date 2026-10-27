@@ -152,6 +152,7 @@ Item {
     spacing: root.theme.space(10)
     Glyph { anchors.horizontalCenter: parent.horizontalCenter; name: "albums"; size: root.theme.display * 1.6; color: root.theme.faint; font.family: root.theme.font }
     Text {
+      textFormat: Text.PlainText
       anchors.horizontalCenter: parent.horizontalCenter
       text: root.service.albumsError || (filter.text ? "No album matches “" + filter.text + "”" : "No albums yet")
       color: root.service.albumsError ? root.theme.urgent : root.theme.foreground

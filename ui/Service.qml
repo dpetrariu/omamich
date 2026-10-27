@@ -406,7 +406,7 @@ Item {
 
   property bool windowOpen: false
   function openWindow(payload) {
-    if (shell && typeof shell.summon === "function") shell.summon("omamich", JSON.stringify(payload || {}))
+    if (shell && typeof shell.summon === "function") shell.summon("dpetrariu.omamich", JSON.stringify(payload || {}))
   }
 
   // After the shell has handed over the manifest, which carries the version.

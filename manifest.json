@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "omamich",
+  "id": "dpetrariu.omamich",
   "name": "Omamich",
   "version": "0.1.2",
   "author": "omamich contributors",
@@ -33,7 +33,7 @@
         "type": "boolean",
         "label": "Show the icon in the bar",
         "defaultValue": true,
-        "description": "Turn this off to keep Omamich out of the bar. Folder sync keeps running; open the window with a keybinding: o.bind(\"SUPER + SHIFT + I\", \"Omamich\", \"omarchy shell shell toggle omamich '{}'\")"
+        "description": "Turn this off to keep Omamich out of the bar. Folder sync keeps running; open the window with a keybinding: o.bind(\"SUPER + SHIFT + I\", \"Omamich\", \"omarchy shell shell toggle dpetrariu.omamich '{}'\")"
       },
       {
         "key": "notifySync",

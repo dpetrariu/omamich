@@ -100,7 +100,8 @@ def main():
 
     lines = ["# Showcase photos", "",
              "The showcase library's photos come from Wikimedia Commons' quality images. Each was resized to fit; "
-             "the dates shown with them are made up, the places are the photos' own.", ""]
+             "the dates shown with them are made up, the places are the photos' own. "
+             "`preview.png`, the marketplace preview in the repository root, is the same screenshot as `docs/images/photos.webp`.", ""]
     for photo, c in credits:
         licence = "[%s](%s)" % (c["licence"], c["licenceUrl"]) if c["licenceUrl"] else c["licence"]
         lines.append("- [%s](%s), by %s, %s" % (photo["file"], c["page"], c["author"] or "unknown", licence))

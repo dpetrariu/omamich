@@ -10,9 +10,9 @@ import "components"
 BarWidget {
   id: root
 
-  moduleName: "omamich"
+  moduleName: "dpetrariu.omamich"
 
-  readonly property var service: bar && bar.shell ? bar.shell.serviceFor("omamich") : null
+  readonly property var service: bar && bar.shell ? bar.shell.serviceFor("dpetrariu.omamich") : null
   readonly property color foreground: bar ? bar.barForeground : Commons.Color.foreground
 
   function pushSettings() {
@@ -25,8 +25,8 @@ BarWidget {
   function openWindow(payload) {
     if (!bar || !bar.shell) return
     var text = JSON.stringify(payload || {})
-    if (payload && typeof bar.shell.summon === "function") bar.shell.summon("omamich", text)
-    else if (typeof bar.shell.toggle === "function") bar.shell.toggle("omamich", text)
+    if (payload && typeof bar.shell.summon === "function") bar.shell.summon("dpetrariu.omamich", text)
+    else if (typeof bar.shell.toggle === "function") bar.shell.toggle("dpetrariu.omamich", text)
   }
 
   readonly property bool drawsIcon: !service || service.showBarIcon

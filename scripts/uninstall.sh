@@ -12,15 +12,18 @@ project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 config="${XDG_CONFIG_HOME:-$HOME/.config}"
 data="${XDG_DATA_HOME:-$HOME/.local/share}"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}"
-link="$config/omarchy/plugins/omamich"
 
 if command -v omarchy >/dev/null; then
+  omarchy plugin disable dpetrariu.omamich >/dev/null 2>&1 || true
   omarchy plugin disable omamich >/dev/null 2>&1 || true
 fi
-# Only remove the plugin entry if it is a link (what install.sh makes), never a real folder.
-if [[ -L "$link" ]]; then
-  rm "$link"
-fi
+# Only remove a plugin entry if it is a link (what install.sh makes), never a real folder.
+# "omamich" is the id this plugin had before "dpetrariu.omamich".
+for link in "$config/omarchy/plugins/dpetrariu.omamich" "$config/omarchy/plugins/omamich"; do
+  if [[ -L "$link" ]]; then
+    rm "$link"
+  fi
+done
 rm -f "$data/applications/omamich.desktop" "$data/applications/omamich-upload.desktop"
 rm -f "$data/icons/hicolor/scalable/apps/omamich.svg"
 update-desktop-database "$data/applications" 2>/dev/null || true

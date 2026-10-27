@@ -51,14 +51,14 @@ Click the photos icon in the bar. Enter your Immich address (for example `http:/
 To open Omamich from the keyboard, add a binding to `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + SHIFT + I", "Omamich", "omarchy shell shell toggle omamich '{}'")
+o.bind("SUPER + SHIFT + I", "Omamich", "omarchy shell shell toggle dpetrariu.omamich '{}'")
 ```
 
 Folder sync starts switched off; turn it on and add folders under **Folder sync**.
 
 ### Update
 
-Run the installer again (the `curl` line, or `./install.sh` in your checkout). It pulls the latest code, fetches the matching backend and restarts the shell. If you installed with `omarchy plugin add`, `omarchy plugin update omamich` works as well; the new backend is downloaded the next time the window opens.
+Run the installer again (the `curl` line, or `./install.sh` in your checkout). It pulls the latest code, fetches the matching backend and restarts the shell. If you installed with `omarchy plugin add`, `omarchy plugin update dpetrariu.omamich` works as well; the new backend is downloaded the next time the window opens.
 
 ### Uninstall
 
@@ -77,7 +77,7 @@ Use the path of your checkout if you installed from one. Nothing in your Immich 
 
 Press `?` in the window for the full sheet. The essentials: `h j k l` move, `enter` view, `esc` back, `space` select, `f` favourite, `a` archive, `d` trash, `Shift+A` add to album, `t` tag, `s` share, `Shift+D` download, `i` details, `/` search, `Alt+1…0` sidebar sections, `Ctrl+,` settings, `Ctrl+Y` folder sync.
 
-Scripts and keybindings can move around (never change anything) over IPC: `omarchy-shell shell call omamich navigate next`, `… navigate go:people`, `… navigate search:sunset`.
+Scripts and keybindings can move around (never change anything) over IPC: `omarchy-shell shell call dpetrariu.omamich navigate next`, `… navigate go:people`, `… navigate search:sunset`.
 
 ## Development
 

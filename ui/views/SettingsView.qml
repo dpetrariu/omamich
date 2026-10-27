@@ -192,7 +192,7 @@ Item {
       Text {
         width: parent.width
         wrapMode: Text.Wrap
-        text: "Press ? in the window for every shortcut. To open Omamich from anywhere, add to ~/.config/hypr/bindings.lua:\n\no.bind(\"SUPER + SHIFT + I\", \"Omamich\", \"omarchy shell shell toggle omamich '{}'\")"
+        text: "Press ? in the window for every shortcut. To open Omamich from anywhere, add to ~/.config/hypr/bindings.lua:\n\no.bind(\"SUPER + SHIFT + I\", \"Omamich\", \"omarchy shell shell toggle dpetrariu.omamich '{}'\")"
         color: root.theme.dim
         font.family: root.theme.font
         font.pixelSize: root.theme.small

@@ -1,6 +1,6 @@
 # Showcase photos
 
-The showcase library's photos come from Wikimedia Commons' quality images. Each was resized to fit; the dates shown with them are made up, the places are the photos' own.
+The showcase library's photos come from Wikimedia Commons' quality images. Each was resized to fit; the dates shown with them are made up, the places are the photos' own. `preview.png`, the marketplace preview in the repository root, is the same screenshot as `docs/images/photos.webp`.
 
 - [Kirkjufell, Iceland, 20240714 1631 0713.jpg](https://commons.wikimedia.org/wiki/File:Kirkjufell,_Iceland,_20240714_1631_0713.jpg), by Jakub Hałun, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0)
 - [Kirkjufell, Vesturland, Islandia, 2014-08-14, DD 091.JPG](https://commons.wikimedia.org/wiki/File:Kirkjufell,_Vesturland,_Islandia,_2014-08-14,_DD_091.JPG), by Diego Delso, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0)

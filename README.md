@@ -32,7 +32,7 @@ You need [Omarchy](https://omarchy.org) 4 or later (Omamich is a plugin for its 
 curl -fsSL https://raw.githubusercontent.com/dpetrariu/omamich/main/install.sh | bash
 ```
 
-It downloads Omamich into `~/.local/share/omamich-plugin`, fetches the prebuilt backend for your machine (x86_64 or ARM; checked against the release checksums), adds the plugin to Omarchy with its bar icon and an "Upload to Immich" entry for your file manager, and restarts the shell. If no prebuilt backend fits, it builds one instead, installing a C compiler and Rust if needed (pacman may ask for your password). `--build` always builds from source.
+It downloads Omamich into `~/.local/share/omamich-plugin`, fetches the prebuilt backend for your machine (x86_64 or ARM; checked against the checksums committed in this repository), adds the plugin to Omarchy with its bar icon and an "Upload to Immich" entry for your file manager, and restarts the shell. If no prebuilt backend fits, it builds one instead, installing a C compiler and Rust if needed (pacman may ask for your password). `--build` always builds from source.
 
 Already have Omarchy's plugin manager in mind? `omarchy plugin add https://github.com/dpetrariu/omamich.git --enable` works too: the first time the window opens, Omamich downloads its backend by itself. The installer additionally sets up the file-manager entry.
 
@@ -92,7 +92,7 @@ qs log -i "$(ls -t /run/user/$UID/quickshell/by-id/ | head -1)" -f | grep omamic
 
 A checkout with a `target/` folder is treated as a development copy: the plugin uses the backend you build and never downloads one over it. `./install.sh` from a checkout builds from source.
 
-Releases: `scripts/release.sh 0.2.0` bumps the version in `Cargo.toml` and `manifest.json`, tags and pushes; the Release workflow tests, builds the x86_64 and ARM backends and publishes them with `SHA256SUMS`. CI runs the unit, sync, library and UI-logic tests on every push.
+Releases: `scripts/release.sh 0.2.0` bumps the version in `Cargo.toml` and `manifest.json`, tags and pushes the tag; the Release workflow tests, builds the x86_64 and ARM backends and publishes them, and the script then commits their checksums to `backend.sha256` and pushes `main`. A published release is never replaced. CI runs the unit, sync, library and UI-logic tests on every push.
 
 `OMAMICH_HOME=/tmp/x omamich serve` runs a backend with its own config, data and cache, and never touches the keyring. The end-to-end tests use this with `tests/mock_immich.py`, so they never touch a real library.
 

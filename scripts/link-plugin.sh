@@ -30,5 +30,10 @@ install -m 644 "$project_dir/ui/assets/icon.svg" "$icons/omamich.svg"
 gtk-update-icon-cache -q -t "${icons%/scalable/apps}" 2>/dev/null || true
 update-desktop-database "$apps" 2>/dev/null || true
 omarchy-shell shell rescanPlugins
-omarchy plugin enable omamich
+# The rescan finishes after the call returns; until then enable reports the plugin unknown.
+for try in {1..20}; do
+  omarchy plugin enable omamich 2>/dev/null && break
+  (( try < 20 )) || omarchy plugin enable omamich
+  sleep 0.5
+done
 echo "Omamich is linked at $install_path. Click the photos icon in the bar."

@@ -58,7 +58,7 @@ Folder sync starts switched off; turn it on and add folders under **Folder sync*
 
 ### Update
 
-Run the installer again (the `curl` line, or `./install.sh` in your checkout). It pulls the latest code, fetches the matching backend and restarts the shell. If you installed with `omarchy plugin add`, `omarchy plugin update dpetrariu.omamich` works as well; the new backend is downloaded the next time the window opens.
+Run the `curl` line again. It moves to the newest release, fetches its backend and restarts the shell; `OMAMICH_COMMIT=<full commit SHA>` installs a specific commit instead. In a checkout of your own, `git pull` and run `./install.sh`. If you installed with `omarchy plugin add`, `omarchy plugin update dpetrariu.omamich` works as well; the new backend is downloaded the next time the shell loads the plugin.
 
 ### Uninstall
 

@@ -1,5 +1,5 @@
-# The prebuilt backends of v0.1.4, as the Release workflow built them from tag v0.1.4 (8909392).
+# The prebuilt backends of v0.1.5, as the Release workflow built them from tag v0.1.5 (1899f53).
 # scripts/fetch-backend.sh installs a download only if it matches a line here; scripts/release.sh
 # writes this file after each release.
-92f038187e1d3dde92011d0d668721d2f9034e15ca0ce01b32e129f50638c032  omamich-0.1.4-linux-aarch64.tar.gz
-a5fe88c506324dab5b6bfc8081e04f7cf15e9da5b435dd0df5234e596f116df6  omamich-0.1.4-linux-x86_64.tar.gz
+0fade908218969a1bac2ecd6abad7620c1570dbbfc02a5323e337b98f7be8f25  omamich-0.1.5-linux-aarch64.tar.gz
+7ae6025d878e0b72c5a76f38a49fb29896562a75a43c12667c9691bdca702d6c  omamich-0.1.5-linux-x86_64.tar.gz

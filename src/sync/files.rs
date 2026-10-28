@@ -98,9 +98,26 @@ pub fn mtime_secs(meta: &std::fs::Metadata) -> i64 {
         .unwrap_or(0)
 }
 
+/// Open a file to read, only if it is a regular file and not a symlink:
+/// a link dropped into a watched folder (by someone sharing it, or a sync
+/// tool) must not send what it points to, an SSH key say, to Immich.
+pub fn open_regular(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW).open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    Ok(file)
+}
+
+/// Whether `path` itself is a regular file (a symlink is not).
+pub fn is_regular(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).map(|m| m.is_file()).unwrap_or(false)
+}
+
 /// SHA-1, the hash Immich uses to recognise a file it already has.
 pub fn sha1_hex(path: &Path) -> std::io::Result<String> {
-    let mut file = std::fs::File::open(path)?;
+    let mut file = open_regular(path)?;
     let mut hasher = Sha1::new();
     let mut buf = vec![0u8; 1 << 20];
     loop {
@@ -140,11 +157,11 @@ pub fn sidecar_for(path: &Path) -> Option<PathBuf> {
     let mut with_ext = path.as_os_str().to_owned();
     with_ext.push(".xmp");
     let first = PathBuf::from(with_ext);
-    if first.is_file() {
+    if is_regular(&first) {
         return Some(first);
     }
     let second = path.with_extension("xmp");
-    second.is_file().then_some(second)
+    is_regular(&second).then_some(second)
 }
 
 /// A file name Immich gave us, made safe to write into a folder.
@@ -207,8 +224,13 @@ pub fn move_to_trash(path: &Path) -> std::io::Result<PathBuf> {
         .join("Trash");
     let files = base.join("files");
     let info = base.join("info");
-    std::fs::create_dir_all(&files)?;
-    std::fs::create_dir_all(&info)?;
+    // The trash is the user's alone (the spec asks for 0700): the names in it,
+    // and the paths in its .trashinfo files, say what was there.
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&files)?;
+        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&info)?;
+    }
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("photo").to_string();
     let target = unique_path(&files, &name);
     let target_name = target.file_name().and_then(|n| n.to_str()).unwrap_or(&name).to_string();
@@ -217,10 +239,16 @@ pub fn move_to_trash(path: &Path) -> std::io::Result<PathBuf> {
         &percent_encoding::NON_ALPHANUMERIC.remove(b'/').remove(b'-').remove(b'_').remove(b'.').remove(b'~');
     let encoded = percent_encoding::utf8_percent_encode(&absolute.to_string_lossy(), PATH_SET).to_string();
     let stamp = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S");
-    std::fs::write(
-        info.join(format!("{target_name}.trashinfo")),
-        format!("[Trash Info]\nPath={encoded}\nDeletionDate={stamp}\n"),
-    )?;
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(info.join(format!("{target_name}.trashinfo")))?;
+        f.write_all(format!("[Trash Info]\nPath={encoded}\nDeletionDate={stamp}\n").as_bytes())?;
+    }
     if std::fs::rename(path, &target).is_err() {
         std::fs::copy(path, &target)?;
         std::fs::remove_file(path)?;
@@ -288,6 +316,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn symlinks_are_never_read_as_photos() {
+        let dir = tempfile::tempdir().unwrap();
+        let secret = dir.path().join("id_ed25519");
+        std::fs::write(&secret, b"private key").unwrap();
+        let link = dir.path().join("leak.jpg");
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+        assert!(open_regular(&link).is_err() && sha1_hex(&link).is_err());
+        assert!(!is_regular(&link) && is_regular(&secret));
+        std::os::unix::fs::symlink(&secret, dir.path().join("photo.jpg.xmp")).unwrap();
+        assert_eq!(sidecar_for(&dir.path().join("photo.jpg")), None);
+    }
+
+    #[test]
     fn folders_omamich_makes_are_private_and_chosen_ones_are_left_alone() {
         use std::os::unix::fs::PermissionsExt;
         let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
@@ -325,6 +366,21 @@ mod tests {
         assert!(!in_quiet_hours("22:00", "07:00", 12 * 60));
         assert!(in_quiet_hours("09:00", "17:00", 10 * 60));
         assert!(!in_quiet_hours("", "", 10));
+    }
+
+    #[test]
+    fn the_trash_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let dir = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("XDG_DATA_HOME", dir.path().join("data")) };
+        let photo = dir.path().join("a.jpg");
+        std::fs::write(&photo, b"x").unwrap();
+        let moved = move_to_trash(&photo).unwrap();
+        let trash = dir.path().join("data/Trash");
+        assert!(moved.exists() && !photo.exists());
+        assert_eq!((mode(&trash), mode(&trash.join("files")), mode(&trash.join("info"))), (0o700, 0o700, 0o700));
+        assert_eq!(mode(&trash.join("info/a.jpg.trashinfo")), 0o600);
     }
 
     #[test]

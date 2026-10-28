@@ -137,6 +137,18 @@ def main():
                  lambda: backend.call("sync.status")["duplicates"] >= 1)
         assert len(state(port)["assets"]) == 3
 
+        # A link dropped into a watched folder is not followed: what it points
+        # to (an SSH key, say) never reaches Immich.
+        outside = os.path.join(root, "outside")
+        os.makedirs(outside, exist_ok=True)
+        photo(f"{outside}/secret.jpg", "secret")
+        os.symlink(f"{outside}/secret.jpg", f"{a}/leak.jpg")
+        time.sleep(8)
+        assert not any(v["name"] == "leak.jpg" for v in state(port)["assets"].values()), "a symlink was uploaded"
+        assert len(state(port)["assets"]) == 3
+        os.remove(f"{a}/leak.jpg")
+        print("ok: a symlink in a watched folder is not uploaded")
+
         backend.call("sync.folderSave", {"folder": {"path": b, "albumName": "Trip", "method": "download"}})
         wait_for("the album is downloaded into B",
                  lambda: sorted(os.listdir(b)) == ["a.jpg", "b.jpg", "d.jpg"] if os.path.isdir(b) else False)

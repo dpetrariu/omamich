@@ -60,11 +60,12 @@ pub async fn upload(
     sidecar: Option<&Path>,
     progress: Arc<AtomicU64>,
 ) -> Result<String> {
-    let meta = tokio::fs::metadata(path).await?;
+    let file = files::open_regular(path)?;
+    let meta = file.metadata()?;
     let modified = meta.modified().unwrap_or(std::time::SystemTime::now());
     let created = meta.created().ok().filter(|c| *c < modified).unwrap_or(modified);
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("photo").to_string();
-    let file = tokio::fs::File::open(path).await?;
+    let file = tokio::fs::File::from_std(file);
     let counter = progress.clone();
     let stream = tokio_util::io::ReaderStream::with_capacity(file, 256 * 1024).inspect_ok(move |chunk| {
         counter.fetch_add(chunk.len() as u64, Ordering::Relaxed);
@@ -79,7 +80,11 @@ pub async fn upload(
         .text("fileModifiedAt", iso(modified))
         .text("isFavorite", "false");
     if let Some(sidecar) = sidecar {
-        if let Ok(bytes) = tokio::fs::read(sidecar).await {
+        let read = files::open_regular(sidecar).and_then(|mut f| {
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut f, &mut bytes).map(|_| bytes)
+        });
+        if let Ok(bytes) = read {
             if let Ok(part) = reqwest::multipart::Part::bytes(bytes)
                 .file_name(sidecar.file_name().and_then(|n| n.to_str()).unwrap_or("sidecar.xmp").to_string())
                 .mime_str("application/xml")
@@ -215,7 +220,14 @@ pub async fn download(immich: &Immich, asset_id: &str, target: &Path, progress: 
         ".{}.omamich-part",
         target.file_name().and_then(|n| n.to_str()).unwrap_or("download")
     ));
-    let mut file = tokio::fs::File::create(&tmp).await?;
+    // Made afresh, never through a link someone planted under that name:
+    // a leftover is removed (a link goes, not what it points to), and if
+    // one appears again before the file is made, the download fails.
+    let _ = std::fs::remove_file(&tmp);
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        tokio::fs::File::from_std(std::fs::OpenOptions::new().write(true).create_new(true).custom_flags(libc::O_NOFOLLOW).open(&tmp)?)
+    };
     let mut written = 0u64;
     let mut body = response.bytes_stream();
     let result: Result<()> = async {

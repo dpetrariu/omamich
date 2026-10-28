@@ -304,6 +304,8 @@ impl Engine {
                 continue;
             }
             if path.is_file() && files::is_media(&path) {
+                // Chosen by hand: a link is taken to mean the file it points to.
+                let path = std::fs::canonicalize(&path).unwrap_or(path);
                 let job = Job::Upload { path, folder_id: None, album_id: album_id.clone(), checksum: None, attempt: 0 };
                 if self.push(job) {
                     count += 1;
@@ -728,7 +730,8 @@ impl Engine {
             None => None,
         };
         // Wait for a file that is still being written to settle.
-        let mut meta = match tokio::fs::metadata(&path).await {
+        // symlink_metadata: a link is not a photo of this folder's.
+        let mut meta = match tokio::fs::symlink_metadata(&path).await {
             Ok(m) if m.is_file() => m,
             _ => return,
         };
@@ -738,9 +741,9 @@ impl Engine {
                 break;
             }
             tokio::time::sleep(SETTLE).await;
-            match tokio::fs::metadata(&path).await {
-                Ok(next) => meta = next,
-                Err(_) => return,
+            match tokio::fs::symlink_metadata(&path).await {
+                Ok(next) if next.is_file() => meta = next,
+                _ => return,
             }
         }
         let size = meta.len() as i64;
@@ -1161,12 +1164,17 @@ impl Engine {
         if !folder.method.uploads() {
             return;
         }
-        if path.is_dir() {
-            let engine = self.clone();
-            tokio::spawn(async move {
-                let _ = engine.scan(&folder, &path).await;
-            });
-            return;
+        // As the full scan does, links (to files or folders) are left alone.
+        match std::fs::symlink_metadata(&path) {
+            Ok(m) if m.is_dir() => {
+                let engine = self.clone();
+                tokio::spawn(async move {
+                    let _ = engine.scan(&folder, &path).await;
+                });
+                return;
+            }
+            Ok(m) if m.is_file() => {}
+            _ => return,
         }
         if files::is_partial(&path) {
             return;

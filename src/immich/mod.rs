@@ -330,7 +330,11 @@ pub fn network_error(err: &reqwest::Error) -> Error {
 /// A redirect keeps the key only on the same host and never drops from https
 /// to http (http to https, as a reverse proxy does, is fine).
 fn same_server(from: &reqwest::Url, to: &reqwest::Url) -> bool {
-    from.host_str() == to.host_str() && !(from.scheme() == "https" && to.scheme() != "https")
+    // The same port too: another port can be another service, or another
+    // user's, on the same machine. http:80 to https:443 is the usual upgrade.
+    let same_port = from.port_or_known_default() == to.port_or_known_default()
+        || (from.scheme() == "http" && from.port_or_known_default() == Some(80) && to.scheme() == "https" && to.port_or_known_default() == Some(443));
+    from.host_str() == to.host_str() && same_port && !(from.scheme() == "https" && to.scheme() != "https")
 }
 
 /// Percent-encode one query value.
@@ -360,6 +364,8 @@ mod tests {
         let url = |s: &str| reqwest::Url::parse(s).unwrap();
         assert!(same_server(&url("http://192.168.1.10:2283/api/x"), &url("http://192.168.1.10:2283/api/y")));
         assert!(same_server(&url("http://photos.home/api/x"), &url("https://photos.home/api/x")));
+        assert!(!same_server(&url("http://nas:2283/api/x"), &url("http://nas:8080/api/x")));
+        assert!(!same_server(&url("http://nas:2283/api/x"), &url("https://nas/api/x")));
         assert!(!same_server(&url("https://photos.home/api/x"), &url("http://photos.home/api/x")));
         assert!(!same_server(&url("http://192.168.1.10:2283/api/x"), &url("https://evil.example/api/x")));
         assert!(!same_server(&url("https://photos.example/api/x"), &url("https://photos.example.evil/api/x")));

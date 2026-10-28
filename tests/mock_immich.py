@@ -375,7 +375,8 @@ class Handler(BaseHTTPRequestHandler):
             # Tests: send every API request to another address from now on.
             REDIRECT["to"] = q.get("to") or None
             return self.reply(200, {"to": REDIRECT["to"]})
-        if REDIRECT["to"] and path.startswith("/api/"):
+        # A proxy that answers the unauthenticated ping but redirects the rest.
+        if REDIRECT["to"] and path.startswith("/api/") and path != "/api/server/ping":
             self.send_response(302)
             self.send_header("Location", REDIRECT["to"] + self.path)
             self.send_header("Content-Length", "0")

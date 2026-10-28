@@ -57,6 +57,9 @@ def main():
         except RuntimeError:
             pass
         expect_error(backend, "asset.albums", {"id": one}, "another address")
+        # Nor does checking an address and key in Setup or Settings.
+        tested = backend.call("auth.test", {"serverUrl": f"http://127.0.0.1:{port}", "key": "a-typed-key-to-check"})
+        assert tested["lan"]["ok"] is False and "another address" in tested["lan"]["error"], tested
         urllib.request.urlopen(f"http://127.0.0.1:{port}/_redirect?to=")
         assert state(port)["keyHosts"] == [f"127.0.0.1:{port}"], state(port)["keyHosts"]
         print("ok: the key does not follow a redirect to another host")

@@ -149,6 +149,26 @@ def main():
         os.remove(f"{a}/leak.jpg")
         print("ok: a symlink in a watched folder is not uploaded")
 
+        # Nor is a link swapped in for a parent directory after a file was
+        # queued: someone writing to a shared folder replaces drop/ with a link
+        # to a private folder holding a photo of the same name while the
+        # queued, freshly written drop/x.jpg is still settling.
+        private = os.path.join(root, "private")
+        photo(f"{private}/x.jpg", "private")
+        os.makedirs(f"{a}/drop")
+        time.sleep(4)  # let the watcher take on the new directory first
+        with open(f"{a}/drop/x.jpg", "wb") as f:
+            f.write(b"\xff\xd8\xff\xe0" + b"fresh" * 200)
+        time.sleep(0.8)
+        os.rename(f"{a}/drop", os.path.join(root, "drop-moved"))
+        os.symlink(private, f"{a}/drop")
+        time.sleep(8)
+        assert not any(v["name"] == "x.jpg" for v in state(port)["assets"].values()), \
+            "a file was uploaded through a parent directory swapped for a symlink"
+        assert len(state(port)["assets"]) == 3
+        os.remove(f"{a}/drop")
+        print("ok: a parent directory swapped for a symlink is not followed")
+
         backend.call("sync.folderSave", {"folder": {"path": b, "albumName": "Trip", "method": "download"}})
         wait_for("the album is downloaded into B",
                  lambda: sorted(os.listdir(b)) == ["a.jpg", "b.jpg", "d.jpg"] if os.path.isdir(b) else False)

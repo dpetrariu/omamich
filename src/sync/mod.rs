@@ -508,6 +508,7 @@ impl Engine {
             })
             .collect();
         let total = changed.len();
+        let folder_root = PathBuf::from(&folder.path);
         for (offset, chunk) in changed.chunks(CHECK_BATCH).enumerate() {
             if !self.settings().enabled {
                 return Ok(());
@@ -521,9 +522,10 @@ impl Engine {
             let hashes = futures_util::future::join_all(chunk.iter().map(|(path, size, mtime)| {
                 let path = path.clone();
                 let (size, mtime) = (*size, *mtime);
+                let folder_root = folder_root.clone();
                 async move {
                     let p = path.clone();
-                    let sum = tokio::task::spawn_blocking(move || files::sha1_hex(&p)).await.ok()?.ok()?;
+                    let sum = tokio::task::spawn_blocking(move || files::sha1_hex(Some(&folder_root), &p)).await.ok()?.ok()?;
                     Some((path, size, mtime, sum))
                 }
             }))
@@ -729,10 +731,16 @@ impl Engine {
             },
             None => None,
         };
-        // Wait for a file that is still being written to settle.
-        // symlink_metadata: a link is not a photo of this folder's.
-        let mut meta = match tokio::fs::symlink_metadata(&path).await {
-            Ok(m) if m.is_file() => m,
+        // Wait for a file that is still being written to settle. Read from
+        // the file open_source reaches: a link, or a parent swapped for one,
+        // is not a photo of this folder's.
+        let root: Option<PathBuf> = folder.as_ref().map(|f| PathBuf::from(&f.path));
+        let stat = || {
+            let (root, path) = (root.clone(), path.clone());
+            tokio::task::spawn_blocking(move || files::source_metadata(root.as_deref(), &path))
+        };
+        let mut meta = match stat().await {
+            Ok(Ok(m)) => m,
             _ => return,
         };
         for _ in 0..30 {
@@ -741,8 +749,8 @@ impl Engine {
                 break;
             }
             tokio::time::sleep(SETTLE).await;
-            match tokio::fs::symlink_metadata(&path).await {
-                Ok(next) if next.is_file() => meta = next,
+            match stat().await {
+                Ok(Ok(next)) => meta = next,
                 _ => return,
             }
         }
@@ -769,8 +777,8 @@ impl Engine {
             let sum = match checksum {
                 Some((sum, s, m)) if s == size && m == mtime => sum,
                 _ => {
-                    let p = path.clone();
-                    tokio::task::spawn_blocking(move || files::sha1_hex(&p))
+                    let (p, root) = (path.clone(), root.clone());
+                    tokio::task::spawn_blocking(move || files::sha1_hex(root.as_deref(), &p))
                         .await
                         .map_err(|e| Error::internal(e.to_string()))??
                 }
@@ -784,7 +792,7 @@ impl Engine {
                 }
                 _ => {
                     let sidecar = if self.settings().upload_sidecars { files::sidecar_for(&path) } else { None };
-                    (remote::upload(&self.immich, &path, sidecar.as_deref(), progress.clone()).await?, true)
+                    (remote::upload(&self.immich, root.as_deref(), &path, sidecar.as_deref(), progress.clone()).await?, true)
                 }
             };
             let target_album = match (&folder, &album_id) {

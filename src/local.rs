@@ -78,7 +78,8 @@ pub async fn check(app: &App, params: &Value) -> Result<Value> {
     }
     let hashed = futures_util::future::join_all(paths.into_iter().map(|path| async move {
         let p = path.clone();
-        let sum = tokio::task::spawn_blocking(move || files::sha1_hex(&p)).await.ok()?.ok()?;
+        // Picked by hand: a link is taken to mean the file it points to.
+        let sum = tokio::task::spawn_blocking(move || files::sha1_hex(None, &std::fs::canonicalize(&p)?)).await.ok()?.ok()?;
         Some((path, sum))
     }))
     .await;

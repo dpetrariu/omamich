@@ -98,16 +98,65 @@ pub fn mtime_secs(meta: &std::fs::Metadata) -> i64 {
         .unwrap_or(0)
 }
 
-/// Open a file to read, only if it is a regular file and not a symlink:
-/// a link dropped into a watched folder (by someone sharing it, or a sync
-/// tool) must not send what it points to, an SSH key say, to Immich.
-pub fn open_regular(path: &Path) -> std::io::Result<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW).open(path)?;
+/// Open a file of a watched folder to read, walking down from `root` one
+/// directory at a time and refusing a symlink at every step, not only the
+/// last. A path that merely starts with the folder is not enough: someone
+/// writing to a shared folder can swap a parent directory for a link to a
+/// private one after the file was queued, and the same name would then be
+/// read from outside the folder. `root` itself is followed, because the
+/// owner chose it. Opening without blocking means a FIFO cannot stall sync.
+pub fn open_beneath(root: &Path, path: &Path) -> std::io::Result<std::fs::File> {
+    use std::ffi::CString;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::Component;
+
+    let outside = || std::io::Error::other("outside the folder");
+    let relative = path.strip_prefix(root).map_err(|_| outside())?;
+    let mut parts: Vec<&std::ffi::OsStr> = Vec::new();
+    for component in relative.components() {
+        match component {
+            Component::Normal(part) => parts.push(part),
+            _ => return Err(outside()),
+        }
+    }
+    let Some((name, dirs)) = parts.split_last() else {
+        return Err(outside());
+    };
+    let open_at = |dir: Option<&OwnedFd>, name: &std::ffi::OsStr, flags: libc::c_int| -> std::io::Result<OwnedFd> {
+        let name = CString::new(name.as_bytes()).map_err(|_| outside())?;
+        let at = dir.map(|d| d.as_raw_fd()).unwrap_or(libc::AT_FDCWD);
+        // SAFETY: a valid NUL-terminated name and a directory fd we own.
+        let fd = unsafe { libc::openat(at, name.as_ptr(), flags | libc::O_CLOEXEC) };
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: openat just returned this fd and nothing else holds it.
+        Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+    };
+    let mut dir = open_at(None, root.as_os_str(), libc::O_RDONLY | libc::O_DIRECTORY)?;
+    for part in dirs {
+        dir = open_at(Some(&dir), part, libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW)?;
+    }
+    let file = std::fs::File::from(open_at(Some(&dir), name, libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK)?);
     if !file.metadata()?.is_file() {
         return Err(std::io::Error::other("not a regular file"));
     }
     Ok(file)
+}
+
+/// Open a file to upload or hash: beneath its watched folder when it has
+/// one. A file the person picked was resolved to its real path when it was
+/// queued, so it is walked from `/` with no link allowed anywhere: a parent
+/// swapped for a link while it waited cannot redirect it either.
+pub fn open_source(root: Option<&Path>, path: &Path) -> std::io::Result<std::fs::File> {
+    open_beneath(root.unwrap_or(Path::new("/")), path)
+}
+
+/// Size and times of a file to upload, read from the file `open_source`
+/// reaches, never from whatever a swapped parent now points to.
+pub fn source_metadata(root: Option<&Path>, path: &Path) -> std::io::Result<std::fs::Metadata> {
+    open_source(root, path)?.metadata()
 }
 
 /// Whether `path` itself is a regular file (a symlink is not).
@@ -115,9 +164,10 @@ pub fn is_regular(path: &Path) -> bool {
     std::fs::symlink_metadata(path).map(|m| m.is_file()).unwrap_or(false)
 }
 
-/// SHA-1, the hash Immich uses to recognise a file it already has.
-pub fn sha1_hex(path: &Path) -> std::io::Result<String> {
-    let mut file = open_regular(path)?;
+/// SHA-1, the hash Immich uses to recognise a file it already has. `root`
+/// is the watched folder the file belongs to, if any (see `open_source`).
+pub fn sha1_hex(root: Option<&Path>, path: &Path) -> std::io::Result<String> {
+    let mut file = open_source(root, path)?;
     let mut hasher = Sha1::new();
     let mut buf = vec![0u8; 1 << 20];
     loop {
@@ -322,10 +372,63 @@ mod tests {
         std::fs::write(&secret, b"private key").unwrap();
         let link = dir.path().join("leak.jpg");
         std::os::unix::fs::symlink(&secret, &link).unwrap();
-        assert!(open_regular(&link).is_err() && sha1_hex(&link).is_err());
+        assert!(open_source(None, &link).is_err() && sha1_hex(None, &link).is_err());
         assert!(!is_regular(&link) && is_regular(&secret));
         std::os::unix::fs::symlink(&secret, dir.path().join("photo.jpg.xmp")).unwrap();
         assert_eq!(sidecar_for(&dir.path().join("photo.jpg")), None);
+    }
+
+    #[test]
+    fn a_parent_swapped_for_a_symlink_is_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("watched");
+        let private = dir.path().join("private");
+        std::fs::create_dir_all(root.join("drop")).unwrap();
+        std::fs::create_dir_all(&private).unwrap();
+        std::fs::write(root.join("drop/x.jpg"), b"shared").unwrap();
+        std::fs::write(private.join("x.jpg"), b"private").unwrap();
+        let path = root.join("drop/x.jpg");
+        assert!(open_beneath(&root, &path).is_ok());
+
+        // The path still starts with the folder, but drop/ now leads outside.
+        std::fs::rename(root.join("drop"), dir.path().join("moved")).unwrap();
+        std::os::unix::fs::symlink(&private, root.join("drop")).unwrap();
+        assert!(std::fs::File::open(&path).is_ok(), "a plain open follows the parent link");
+        assert!(open_beneath(&root, &path).is_err());
+        assert!(sha1_hex(Some(&root), &path).is_err());
+        assert!(open_source(Some(&root), &path).is_err());
+        assert!(source_metadata(Some(&root), &path).is_err());
+
+        // A hand-picked file is queued by its real path and opened from `/`
+        // with no link allowed, so the same swap cannot redirect it either.
+        let real = std::fs::canonicalize(dir.path().join("moved/x.jpg")).unwrap();
+        assert!(open_source(None, &real).is_ok());
+        assert!(open_source(None, &path).is_err());
+    }
+
+    #[test]
+    fn open_beneath_stays_inside_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("watched");
+        std::fs::create_dir_all(root.join("a/b")).unwrap();
+        std::fs::write(root.join("a/b/photo.jpg"), b"ok").unwrap();
+        std::fs::write(dir.path().join("outside.jpg"), b"no").unwrap();
+        assert!(open_beneath(&root, &root.join("a/b/photo.jpg")).is_ok());
+        assert!(open_beneath(&root, &root.join("a/../../outside.jpg")).is_err());
+        assert!(open_beneath(&root, &dir.path().join("outside.jpg")).is_err());
+        assert!(open_beneath(&root, &root).is_err());
+        assert!(open_beneath(&root, &root.join("a")).is_err(), "a directory is not a photo");
+
+        // The folder the person chose may itself be reached through a link.
+        let alias = dir.path().join("alias");
+        std::os::unix::fs::symlink(&root, &alias).unwrap();
+        assert!(open_beneath(&alias, &alias.join("a/b/photo.jpg")).is_ok());
+
+        // A FIFO named like a photo is refused instead of blocking the open.
+        let fifo = root.join("a/pipe.jpg");
+        let name = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert!(open_beneath(&root, &fifo).is_err());
     }
 
     #[test]
@@ -388,7 +491,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("a.jpg");
         std::fs::write(&file, b"hello").unwrap();
-        assert_eq!(sha1_hex(&file).unwrap(), "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d");
+        assert_eq!(sha1_hex(None, &file).unwrap(), "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d");
         assert_eq!(base64_to_hex("qvTGHdzF6KLavt4PO0gs2a6pQ00=").unwrap(), "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d");
     }
 

@@ -53,14 +53,17 @@ fn iso(meta_time: std::time::SystemTime) -> String {
     dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
-/// Upload one file. `progress` is advanced as bytes leave.
+/// Upload one file. `progress` is advanced as bytes leave. `root` is the
+/// watched folder the file came from, if any: the file and its sidecar are
+/// opened beneath it (see `files::open_source`).
 pub async fn upload(
     immich: &Immich,
+    root: Option<&Path>,
     path: &Path,
     sidecar: Option<&Path>,
     progress: Arc<AtomicU64>,
 ) -> Result<String> {
-    let file = files::open_regular(path)?;
+    let file = files::open_source(root, path)?;
     let meta = file.metadata()?;
     let modified = meta.modified().unwrap_or(std::time::SystemTime::now());
     let created = meta.created().ok().filter(|c| *c < modified).unwrap_or(modified);
@@ -80,7 +83,7 @@ pub async fn upload(
         .text("fileModifiedAt", iso(modified))
         .text("isFavorite", "false");
     if let Some(sidecar) = sidecar {
-        let read = files::open_regular(sidecar).and_then(|mut f| {
+        let read = files::open_source(root, sidecar).and_then(|mut f| {
             let mut bytes = Vec::new();
             std::io::Read::read_to_end(&mut f, &mut bytes).map(|_| bytes)
         });

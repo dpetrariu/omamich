@@ -6,8 +6,8 @@ no real library is involved.
 
 usage: screenshots.py path/to/omamich SHOWCASE_DIR OUT_DIR
 
-Writes OUT_DIR/{photos,viewer,albums,places}.webp and copies the showcase
-CREDITS.md beside them.
+Writes OUT_DIR/{photos,grid,viewer,albums,places}.webp, OUT_DIR/preview.png
+(the grid, for the marketplace) and copies the showcase CREDITS.md beside them.
 """
 import os
 import shutil
@@ -41,8 +41,22 @@ def main():
             time.sleep(settle)  # thumbnails load and fade in
             png = h.shot(name)
             subprocess.run(["magick", png, "-quality", "88", os.path.join(out, name + ".webp")], check=True)
+            return png
 
         shot("photos")
+        h.js("app.setPhotoLayout('square')")
+        wait_for("the plain grid", lambda: h.value("app.activeGrid().layoutMode") == "square", 10)
+        # The seal, with its details beside the grid.
+        h.nav("right")
+        h.nav("right")
+        h.nav("right")
+        h.nav("right")
+        h.nav("info", 1)
+        wait_for("its details", lambda: h.value("hooks.info.details ? hooks.info.details.originalFileName : ''") == "SEAL.JPG", 10)
+        shutil.copy(shot("grid"), os.path.join(out, "preview.png"))
+        h.nav("info", 0.5)
+        h.nav("first")
+        h.js("app.setPhotoLayout('justified')")
         seal = asset_named(port, "SEAL.JPG")
         h.js(f"app.openViewer({{ id: '{seal}', isImage: true, ratio: 1.5, thumbhash: null, fileCreatedAt: '2026-10-19T11:20:00' }})")
         wait_for("the viewer", lambda: h.value("app.viewerAsset ? app.viewerAsset.id : ''") == seal, 10)

@@ -7,7 +7,7 @@ Your [Immich](https://immich.app) photo library in a native Omarchy window, plus
 | | |
 |---|---|
 | ![A photo with its details: camera, place, album and tags](docs/images/viewer.webp) | ![Albums, each with its cover and dates](docs/images/albums.webp) |
-| ![Places, one cover per city](docs/images/places.webp) | |
+| ![Places, one cover per city](docs/images/places.webp) | ![The plain grid, with the selected photo's details beside it](docs/images/grid.webp) |
 
 <sub>The library in these screenshots is freely licensed photos from Wikimedia Commons, served by Omamich's test server; see [the photo credits](docs/images/CREDITS.md).</sub>
 

@@ -165,6 +165,55 @@ def main():
         h.nav("first")
         print("ok: momentum scrolling and rubber-band ends")
 
+        # The plain grid: square tiles, no day headers, the same photos; the
+        # choice is kept, and keys still move through it.
+        g = "app.activeGrid()"
+        days = h.value(f"(function(){{ var n = 0; for (var k in {g}.layoutOf) {g}.layoutOf[k].forEach(function(r){{ if (r.count === 0) n++ }}); return n }})()")
+        assert days > 0, "the timeline should start with day headers"
+        h.js("app.setPhotoLayout('square')")
+        time.sleep(1.0)
+        assert h.value(f"{g}.layoutMode") == "square"
+        rows = h.value(f"(function(){{ var out = []; for (var k in {g}.layoutOf) out = out.concat({g}.layoutOf[k]); return out }})()")
+        assert rows and all(r["count"] > 0 for r in rows), "day headers left in the grid"
+        cols = h.value(f"{g}.squareGrid.columns")
+        size = h.value(f"{g}.squareGrid.size")
+        assert all(r["count"] <= cols and abs(r["height"] - size) < 0.5 for r in rows), (cols, size, rows[:3])
+        assert h.value(f"{g}.total") == 44
+        assert h.value("service.pref('photoLayout', '')") == "square"
+        h.nav("first")
+        start = h.value(f"{g}.cursor")
+        h.nav("down")
+        moved = h.value(f"{g}.cursor")
+        assert moved["index"] - start["index"] == cols or moved["bucket"] != start["bucket"], (start, moved, cols)
+        h.shot("01b-photos-grid")
+        h.js("app.setZoom(app.zoom * 1.2)")
+        time.sleep(0.8)
+        assert h.value(f"{g}.squareGrid.columns") < cols, "larger thumbnails should mean fewer columns"
+        h.js("app.setZoom(app.zoom / 1.2)")
+        h.js("app.setPhotoLayout('justified')")
+        time.sleep(1.0)
+        assert h.value("service.pref('photoLayout', '')") == "justified"
+        h.nav("first")
+        print("ok: plain square grid, switching back, thumbnail size")
+
+        # Details beside the grid: they follow the cursor without opening the
+        # photo, and close again with i.
+        assert h.value("app.infoOpen") is False
+        h.nav("info", 1.0)
+        here = h.value("app.activeGrid().currentAsset().id")
+        wait_for("details of the selected photo", lambda: h.value("hooks.info.width > 0 && hooks.info.asset ? hooks.info.asset.id : ''") == here, 10)
+        wait_for("its details load", lambda: h.value("hooks.info.details ? hooks.info.details.id : ''") == here, 10)
+        assert h.value("!app.viewerAsset") is True, "the photo should not open"
+        h.nav("right")
+        there = h.value("app.activeGrid().currentAsset().id")
+        assert there != here
+        wait_for("the details follow the cursor", lambda: h.value("hooks.info.details ? hooks.info.details.id : ''") == there, 10)
+        h.shot("01c-grid-details")
+        h.nav("info", 1.0)
+        assert h.value("app.infoOpen") is False and h.value("hooks.info.width") == 0
+        h.nav("first")
+        print("ok: details beside the grid follow the cursor")
+
         # Keyboard movement and the viewer.
         first = h.value("app.activeGrid().currentAsset().id")
         h.nav("right")
@@ -200,7 +249,7 @@ def main():
         assert h.value("hooks.prompt.opened") is False
         h.shot("03-after-date-edit")
         h.nav("back", 2)
-        assert h.value("app.viewerAsset") is None
+        assert h.value("!app.viewerAsset") is True, "the photo should not open"
         wait_for("the photo moved to its new month", lambda: h.value("app.activeGrid().buckets.map(function(b){return b.key}).indexOf('2023-07-01') >= 0"))
         print("ok: favourite, rating, date edit and the grid reloading after it")
 

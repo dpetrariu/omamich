@@ -57,6 +57,21 @@ test("the last row is not stretched", () => {
   assert.deepStrictEqual(Array.from(Layout.widths(items, rows[0], 1000, 3)), [200])
 })
 
+test("the square grid has equal tiles in full columns", () => {
+  const grid = Layout.squareGrid(1000, 150, 3)
+  assert.strictEqual(grid.columns, 7)
+  assert.strictEqual(grid.size, Math.floor((1000 - 3 * 6) / 7))
+  assert.ok(grid.columns * grid.size + 3 * (grid.columns - 1) <= 1000)
+  const rows = Layout.squareRows(16, grid)
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(rows)), [
+    { start: 0, count: 7, height: grid.size },
+    { start: 7, count: 7, height: grid.size },
+    { start: 14, count: 2, height: grid.size }])
+  assert.deepStrictEqual(Array.from(Layout.squareWidths(2, grid)), [grid.size, grid.size])
+  assert.strictEqual(Layout.squareGrid(100, 400, 3).columns, 1)
+  assert.strictEqual(Layout.squareGrid(0, 150, 3).columns, 1)
+})
+
 test("broken ratios are clamped", () => {
   assert.strictEqual(Layout.clampRatio(null), 1)
   assert.strictEqual(Layout.clampRatio(50), 3.2)

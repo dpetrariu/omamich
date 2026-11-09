@@ -20,6 +20,9 @@ Item {
   property var pager: null
   property string listTitle: ""
   property bool groupByDay: true
+  // "justified": rows that keep each photo's shape. "square": a plain grid of
+  // equal square tiles with no day headers.
+  property string layoutMode: "justified"
   property string emptyIcon: "photos"
   property string emptyTitle: "No photos here"
   property string emptyText: ""
@@ -35,7 +38,9 @@ Item {
   property string sortMode: ""
 
   readonly property bool listMode: typeof pager === "function"
-  readonly property real targetHeight: Math.round(theme.space(200) * zoom)
+  readonly property bool square: layoutMode === "square"
+  readonly property real targetHeight: square ? squareGrid.size : Math.round(theme.space(200) * zoom)
+  readonly property var squareGrid: Layout.squareGrid(contentWidth, Math.round(theme.space(150) * zoom), gap)
   readonly property real gap: theme.space(3)
   property alias wheel: wheel
   property alias scrollView: list
@@ -76,6 +81,7 @@ Item {
   }
   onContentWidthChanged: relayoutTimer.restart()
   onZoomChanged: relayoutTimer.restart()
+  onLayoutModeChanged: relayoutTimer.restart()
 
   Timer {
     id: relayoutTimer
@@ -226,7 +232,10 @@ Item {
   function layoutBucket(key) {
     var assets = assetsOf[key] || []
     var out = []
-    if (groupByDay && !listMode) {
+    if (square) {
+      var sq = Layout.squareRows(assets.length, squareGrid)
+      for (var q = 0; q < sq.length; q++) out.push({ day: "", start: sq[q].start, count: sq[q].count, height: sq[q].height })
+    } else if (groupByDay && !listMode) {
       var start = 0
       while (start < assets.length) {
         var day = Format.dayKey(assets[start].fileCreatedAt)
@@ -253,6 +262,7 @@ Item {
   }
 
   function estimateHeight(bucket) {
+    if (square) return Math.max(1, Math.ceil(bucket.count / squareGrid.columns)) * (squareGrid.size + gap)
     var count = Layout.estimateRows(bucket.count, contentWidth, targetHeight, gap)
     return Math.max(targetHeight, count * (targetHeight + gap))
   }
@@ -387,9 +397,14 @@ Item {
     return -1
   }
 
+  // The widths of one laid-out row's photos, in either layout.
+  function rowWidths(key, r) {
+    return square ? Layout.squareWidths(r.count, squareGrid) : Layout.widths(assetsOf[key], r, contentWidth, gap)
+  }
+
   function centerOf(c, rowIndex) {
     var r = layoutOf[c.bucket][rowIndex]
-    var widths = Layout.widths(assetsOf[c.bucket], r, contentWidth, gap)
+    var widths = rowWidths(c.bucket, r)
     var x = 0
     for (var i = 0; i < r.count; i++) {
       if (r.start + i === c.index) return x + widths[i] / 2
@@ -400,7 +415,7 @@ Item {
 
   function nearestIn(key, rowIndex, center) {
     var r = layoutOf[key][rowIndex]
-    var widths = Layout.widths(assetsOf[key], r, contentWidth, gap)
+    var widths = rowWidths(key, r)
     var x = 0
     var best = r.start
     var bestDistance = Infinity
@@ -744,7 +759,7 @@ Item {
         Item {
           id: photoRowRoot
           readonly property var assets: root.assetsOf[rowItem.bucket] || []
-          readonly property var widths: Layout.widths(assets, { start: rowItem.start, count: rowItem.n, height: rowItem.h - root.gap }, root.contentWidth, root.gap)
+          readonly property var widths: root.rowWidths(rowItem.bucket, { start: rowItem.start, count: rowItem.n, height: rowItem.h - root.gap })
           Row {
             spacing: root.gap
             Repeater {
@@ -797,13 +812,14 @@ Item {
           Component.onCompleted: root.ensureLoaded(rowItem.bucket)
           Grid {
             anchors.fill: parent
-            columns: Math.max(1, Math.floor((root.contentWidth + root.gap) / (root.targetHeight * 1.35 + root.gap)))
+            columns: root.square ? root.squareGrid.columns
+              : Math.max(1, Math.floor((root.contentWidth + root.gap) / (root.targetHeight * 1.35 + root.gap)))
             spacing: root.gap
             clip: true
             Repeater {
               model: Math.min(rowItem.n, 60)
               Rectangle {
-                width: (root.contentWidth - root.gap * (parent.columns - 1)) / parent.columns
+                width: root.square ? root.squareGrid.size : (root.contentWidth - root.gap * (parent.columns - 1)) / parent.columns
                 height: root.targetHeight
                 color: root.theme.sunken
               }

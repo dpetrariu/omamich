@@ -19,6 +19,9 @@ Item {
   property bool sortable: true
   property string order: "desc"
   property string sortMode: ""
+  // "justified" (rows by day) or "square" (a plain grid); App keeps the choice.
+  property string layoutMode: "justified"
+  property bool layoutSwitch: true
   readonly property var sortLabels: ({ "": "Newest first", newest: "Newest first", oldest: "Oldest first", name: "By name", type: "Photos, then videos" })
   property string emptyIcon: "photos"
   property string emptyTitle: "No photos here"
@@ -32,6 +35,7 @@ Item {
   signal contextRequested(var asset, Item item, real x, real y)
   signal back()
   signal actionTriggered(string id)
+  signal layoutRequested(string mode)
 
   function reload() { timeline.reload() }
 
@@ -43,13 +47,18 @@ Item {
     subtitle: root.subtitle !== "" ? root.subtitle
       : (timeline.total > 0 ? Format.count(timeline.total, "item") : "")
     showBack: root.showBack
-    actions: root.actions.concat(!root.sortable ? [] : [{
+    // One button: it names the layout on screen and switches to the other.
+    actions: root.actions.concat(!root.layoutSwitch ? [] : [root.layoutMode === "square"
+      ? { id: "_layout", icon: "grid", label: "Grid" }
+      : { id: "_layout", icon: "dates", label: "By day" }
+    ]).concat(!root.sortable ? [] : [{
       id: "_sort", icon: "sort",
       label: root.pager ? root.sortLabels[root.sortMode] : (root.order === "asc" ? "Oldest first" : "Newest first")
     }])
     onBack: root.back()
     onActionTriggered: function(id, button) {
-      if (id !== "_sort") root.actionTriggered(id)
+      if (id === "_layout") root.layoutRequested(root.layoutMode === "square" ? "justified" : "square")
+      else if (id !== "_sort") root.actionTriggered(id)
       else if (root.pager) sortMenu.openBelow(button)
       else root.order = root.order === "asc" ? "desc" : "asc"
     }
@@ -76,6 +85,7 @@ Item {
     scope: root.order === "asc" ? Object.assign({}, root.scope, { order: "asc" }) : root.scope
     pager: root.pager
     sortMode: root.sortMode
+    layoutMode: root.layoutMode
     zoom: root.zoom
     emptyIcon: root.emptyIcon
     emptyTitle: root.emptyTitle

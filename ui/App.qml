@@ -138,10 +138,47 @@ Item {
   readonly property var page: stack.length > 0 ? stack[stack.length - 1] : null
   property bool settingsOpen: false
   property var viewerAsset: null
+  // The photo under the grid's cursor; the details panel shows it when no
+  // photo is open.
+  readonly property var gridAsset: {
+    var item = contentLoader.item
+    var grid = item && item.grid ? item.grid : null
+    return grid && grid.cursor ? grid.assetAt(grid.cursor) : null
+  }
+  // What the details panel shows beside the grid: the cursor's photo once the
+  // cursor has settled, so moving through the grid sends no request per step.
+  property var gridShown: null
+  property var gridDetails: null
+  readonly property var panelAsset: viewerAsset || gridShown
+  function remoteIdOf(a) { return !a ? "" : a.localPath ? (a.assetId || "") : a.id }
+  onGridAssetChanged: {
+    if (gridAsset && gridShown && gridAsset.id === gridShown.id) return
+    gridShownTimer.restart()
+  }
+  onInfoOpenChanged: if (infoOpen && gridShown && !gridDetails) loadGridDetails()
+  Timer {
+    id: gridShownTimer
+    interval: 150
+    onTriggered: {
+      root.gridShown = root.gridAsset
+      root.gridDetails = null
+      if (root.infoOpen) root.loadGridDetails()
+    }
+  }
+  function loadGridDetails() {
+    var id = remoteIdOf(gridShown)
+    if (!id) return
+    service.call("asset.get", { id: id }, function(r, e) { if (!root) return;
+      if (!e && root.remoteIdOf(root.gridShown) === id) root.gridDetails = r
+    })
+  }
+
   property bool infoOpen: service ? service.pref("infoOpen", false) === true : false
   property bool sidebarCollapsed: service ? service.pref("sidebarCollapsed", false) === true : false
   property bool helpOpen: false
   property real zoom: service ? Number(service.pref("gridZoom", 1)) || 1 : 1
+  // The photo grids' layout: "justified" rows grouped by day, or "square".
+  property string photoLayout: service && service.pref("photoLayout", "justified") === "square" ? "square" : "justified"
   property bool fullscreen: false
   // A phone-width window: tabs at the bottom instead of the sidebar.
   readonly property bool narrow: narrowOverride || window.width < appTheme.space(640)
@@ -334,7 +371,8 @@ Item {
       case "selectAll": grid.selectAll(); return
       case "refresh": refreshContent(); return
       case "info":
-        if (grid.currentAsset()) { setInfo(true); openViewer(grid.currentAsset()) }
+        // Details beside the grid, for the photo under the cursor.
+        setInfo(!infoOpen)
         return
       }
       photoAction(id, grid.targets(), grid)
@@ -360,6 +398,11 @@ Item {
   function setInfo(on) {
     infoOpen = on
     service.setPref("infoOpen", on)
+  }
+
+  function setPhotoLayout(mode) {
+    photoLayout = mode === "square" ? "square" : "justified"
+    service.setPref("photoLayout", photoLayout)
   }
 
   function setZoom(z) {
@@ -1127,6 +1170,14 @@ Item {
           onClicked: root.setZoom(root.zoom * 1.2)
         }
         IconButton {
+          visible: !root.narrow && !!root.activeGrid()
+          theme: appTheme
+          icon: "info"
+          selected: root.infoOpen
+          tooltip: root.infoOpen ? "Hide details (i)" : "Show details (i)"
+          onClicked: root.setInfo(!root.infoOpen)
+        }
+        IconButton {
           theme: appTheme
           icon: "refresh"
           tooltip: "Reload (r)"
@@ -1253,19 +1304,20 @@ Item {
         service: root.service
         anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
         visible: width > 0
-        width: root.infoOpen && root.viewerAsset && !body.compact ? appTheme.space(340) : 0
-        details: viewer.details
-        faces: viewer.faces
-        selectedFace: viewer.selectedFace
-        asset: root.viewerAsset
+        width: root.infoOpen && root.panelAsset && !body.compact ? appTheme.space(340) : 0
+        // Beside the grid it lists the people; their faces are edited in the viewer.
+        details: root.viewerAsset ? viewer.details : root.gridDetails
+        faces: root.viewerAsset ? viewer.faces : []
+        selectedFace: root.viewerAsset ? viewer.selectedFace : ""
+        asset: root.panelAsset
         onClosed: root.setInfo(false)
         onToast: function(text, tone) { toast.show(text, { tone: tone }) }
-        onChanged: viewer.reloadDetails()
+        onChanged: { if (root.viewerAsset) viewer.reloadDetails(); else root.loadGridDetails() }
         onPersonOpened: function(person) { root.closeViewer(); root.go("people"); root.push({ kind: "person", person: person }) }
         onAlbumOpened: function(album) { root.closeViewer(); root.go("albums"); root.push({ kind: "album", album: album }) }
         onPlaceOpened: function(place) { root.closeViewer(); root.go("places"); root.push({ kind: "place", place: place }) }
         onTagOpened: function(tag) { root.closeViewer(); root.go("tags"); root.push({ kind: "tag", tag: tag }) }
-        onEditDate: root.editDate([root.viewerAsset], root.activeGrid())
+        onEditDate: root.editDate([root.panelAsset], root.activeGrid())
         onFaceHovered: function(id) { viewer.hoverFace = id }
         onFaceClicked: function(face, item) { root.showFaceMenu(face, item) }
       }
@@ -1434,6 +1486,8 @@ Item {
     id: photosView
     PhotosView {
       theme: appTheme; service: root.service; zoom: root.zoom
+      layoutMode: root.photoLayout
+      onLayoutRequested: function(mode) { root.setPhotoLayout(mode) }
       title: "Photos"
       scope: ({ withPartners: true })
       emptyText: "Photos you add to Immich, or that folder sync uploads, appear here."
@@ -1445,6 +1499,8 @@ Item {
     id: favoritesView
     PhotosView {
       theme: appTheme; service: root.service; zoom: root.zoom
+      layoutMode: root.photoLayout
+      onLayoutRequested: function(mode) { root.setPhotoLayout(mode) }
       title: "Favourites"
       scope: ({ isFavorite: true })
       emptyIcon: "favorite"
@@ -1458,6 +1514,8 @@ Item {
     id: archiveView
     PhotosView {
       theme: appTheme; service: root.service; zoom: root.zoom
+      layoutMode: root.photoLayout
+      onLayoutRequested: function(mode) { root.setPhotoLayout(mode) }
       title: "Archive"
       subtitle: "Archived photos stay out of the timeline but remain in albums and search."
       scope: ({ visibility: "archive" })
@@ -1472,6 +1530,8 @@ Item {
     id: trashView
     PhotosView {
       theme: appTheme; service: root.service; zoom: root.zoom
+      layoutMode: root.photoLayout
+      onLayoutRequested: function(mode) { root.setPhotoLayout(mode) }
       title: "Trash"
       subtitle: "Photos here are deleted for good after the server's trash period."
       scope: ({ isTrashed: true })
@@ -1594,6 +1654,8 @@ Item {
     id: placePage
     PhotosView {
       theme: appTheme; service: root.service; zoom: root.zoom
+      layoutMode: root.photoLayout
+      onLayoutRequested: function(mode) { root.setPhotoLayout(mode) }
       readonly property var place: root.page ? root.page.place : null
       title: place ? (place.city || place.country) : ""
       subtitle: place ? [place.city ? place.country : "", place.count ? Format.count(place.count, "photo") : ""].filter(function(s) { return s }).join(" · ") : ""
@@ -1614,6 +1676,8 @@ Item {
     id: tagPage
     PhotosView {
       theme: appTheme; service: root.service; zoom: root.zoom
+      layoutMode: root.photoLayout
+      onLayoutRequested: function(mode) { root.setPhotoLayout(mode) }
       readonly property var tag: root.page ? root.page.tag : null
       title: tag ? (tag.value || tag.name) : ""
       showBack: true

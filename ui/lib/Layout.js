@@ -71,6 +71,31 @@ function estimateRows(count, width, targetHeight, gap) {
   return Math.ceil(count / perRow)
 }
 
+// The plain grid: equal square tiles, as many across as come closest to
+// `targetSize`. Returns { columns, size } where `size` is the tile's side.
+function squareGrid(width, targetSize, gap) {
+  if (width <= 0 || targetSize <= 0) return { columns: 1, size: Math.max(1, width) }
+  var columns = Math.max(1, Math.round((width + gap) / (targetSize + gap)))
+  return { columns: columns, size: Math.max(1, Math.floor((width - gap * (columns - 1)) / columns)) }
+}
+
+// Rows of `count` square tiles: [{ start, count, height }]; only the last can
+// be short.
+function squareRows(count, grid) {
+  var out = []
+  for (var start = 0; start < count; start += grid.columns)
+    out.push({ start: start, count: Math.min(grid.columns, count - start), height: grid.size })
+  return out
+}
+
+// The widths of a square row's tiles: every tile is the same size, so the
+// columns line up from row to row (a short last row leaves space at its end).
+function squareWidths(count, grid) {
+  var out = []
+  for (var i = 0; i < count; i++) out.push(grid.size)
+  return out
+}
+
 // Square tiles for people and albums: how many fit across.
 function columns(width, minTile, gap) {
   return Math.max(1, Math.floor((width + gap) / (minTile + gap)))
